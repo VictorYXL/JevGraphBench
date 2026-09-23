@@ -225,3 +225,10 @@ docs/superpowers/
 veloren/
 .azure_jobs
 /benchmark_code_snapshot/
+
+# Real-network archives remain local pending upstream redistribution review.
+# Source URLs, checksums, statistics and download code are versionable.
+/data/real/raw/
+
+# Local benchmark artifacts (configuration templates remain versioned).
+/results/
