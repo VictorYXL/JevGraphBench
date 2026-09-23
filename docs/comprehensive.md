@@ -4,13 +4,18 @@
 
 The earlier smoke run already used a real power-grid source, but evaluated only eight questions on two 16-node subgraphs. This protocol broadens the **two existing topology-only decision tasks** across domains, graph sizes, and distance thresholds. It is not a complete test of all graph algorithms or real-world domain reasoning.
 
-Run [configs/comprehensive.yaml](../configs/comprehensive.yaml) with [run_benchmark.py](../run_benchmark.py) after setting `TYPESAFE_API_KEY` securely in your terminal:
+For new runs, evaluate each task separately with [configs/adjacency.yaml](../configs/adjacency.yaml) or [configs/distance_threshold.yaml](../configs/distance_threshold.yaml), using [run_benchmark.py](../run_benchmark.py) after setting `TYPESAFE_API_KEY` securely in your terminal:
 
 ```bash
-python run_benchmark.py --config configs/comprehensive.yaml --output results/comprehensive-live-001
+python run_benchmark.py --config configs/adjacency.yaml
+python run_benchmark.py --config configs/distance_threshold.yaml
 ```
 
-Run from the repository root and use a new output directory. This command starts live Jev calls immediately and may incur charges. Credentials must not be placed in the YAML file. No additional execution flag is required.
+Run from the repository root and use new output directories. Each command starts live Jev calls immediately and may incur charges. Credentials must not be placed in YAML. No additional execution flag is required.
+
+The original [configs/comprehensive.yaml](../configs/comprehensive.yaml) remains unchanged for historical mixed-run reproduction. The table below describes its combined scope. The new adjacency configuration has a 960-call ceiling; the distance configuration has a 3,840-call ceiling. They default to separate output directories and retain the same seed, sampling settings, model, and per-task quotas. The distance thresholds remain difficulty levels of a single task.
+
+Offline comparison against the completed comprehensive run confirmed identical sampled graphs and exact per-task request/label records: 960 adjacency questions and 3,492 distance questions. Their union equals the original evaluation. There is no need to repeat paid calls solely to adopt this configuration split; existing per-task results remain usable.
 
 ## Fixed configuration
 
@@ -30,7 +35,7 @@ Run from the repository root and use a new output directory. This command starts
 | Per-call deadline | 30 seconds |
 | Concurrency / retries | 1 / 0 |
 
-The requested model is the version returned by the successful smoke evaluation. Acceptance of that pinned identifier on a subsequent live call has not been verified by this audit. The runner records the actual returned version; there is no automatic fallback. If the provider no longer accepts it, select an available version explicitly and treat that as a configuration change.
+The requested model is the version returned by the successful smoke evaluation and accepted in the user's completed comprehensive run. The runner records the actual returned version; there is no automatic fallback. If the provider no longer accepts it, select an available version explicitly and treat that as a configuration change.
 
 Distance questions use positive pairs at distance k and negative pairs at distance k+1. The hardest configured boundary is therefore 6 versus 7 hops. Larger graphs add distractor structure, but node count alone is not a controlled causal measure of reasoning difficulty: density, distance, and input length may vary together.
 

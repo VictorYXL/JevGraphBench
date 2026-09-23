@@ -231,4 +231,5 @@ veloren/
 /data/real/raw/
 
 # Local benchmark artifacts (configuration templates remain versioned).
-/results/
+results/
+output/

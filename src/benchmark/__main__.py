@@ -14,11 +14,12 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run topology-only Jev evaluation using TYPESAFE_API_KEY")
     parser.add_argument("--config", type=Path, required=True, help="YAML benchmark configuration (.yaml/.yml)")
     parser.add_argument("--output", type=Path, help="Override output directory (relative to current directory)")
+    parser.add_argument("--no-progress", action="store_true", help="Disable progress display on stderr")
     args = parser.parse_args(argv)
     config = load_config(args.config)
     if args.output:
         config = replace(config, run=replace(config.run, output_dir=args.output.resolve()))
-    result = asyncio.run(run_experiment(config))
+    result = asyncio.run(run_experiment(config, progress=not args.no_progress))
     print(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2))
 
 

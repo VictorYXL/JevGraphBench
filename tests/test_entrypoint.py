@@ -34,6 +34,7 @@ class ScriptEntryPointTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("run_benchmark.py", result.stdout)
         self.assertIn("--config", result.stdout)
+        self.assertIn("--no-progress", result.stdout)
         self.assertNotIn("--execute", result.stdout)
 
 

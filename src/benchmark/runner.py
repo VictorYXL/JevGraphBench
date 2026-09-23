@@ -21,6 +21,7 @@ from src.clients.registry import create_client
 from src.datasets import GraphDataset, load_graph
 from .config import BenchmarkConfig
 from .prepare import PreparedBenchmark, prepare
+from .progress import EvaluationProgress
 
 
 def _utc() -> str:
@@ -32,7 +33,8 @@ def _json(value: object) -> str:
 
 
 def _write_json(path: Path, value: object) -> None:
-    path.write_text(_json(value) + "\n", encoding="utf-8")
+    text = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2)
+    path.write_text(text + "\n", encoding="utf-8")
 
 
 def _write_jsonl(path: Path, rows) -> None:
@@ -133,11 +135,13 @@ async def run_experiment(
     config: BenchmarkConfig, *,
     client: BaseDecisionClient | None = None,
     loader: Callable[..., GraphDataset] = load_graph,
+    progress: bool = False,
 ) -> dict:
     """Prepare samples and run evaluation. Owns/closes the client once entered.
 
     An injected client is only for tests/custom callers; the CLI never offers a
     mock model whose numbers could be mistaken for actual Jev performance.
+    Progress is opt-in for library callers and goes to stderr, not artifacts.
     """
     if config.planned_questions * config.run.repetitions > config.run.max_calls:
         raise ValueError("Planned calls exceed max_calls")
@@ -158,7 +162,9 @@ async def run_experiment(
     rows: list[dict] = []
     prepared = None
     run_started = None
+    display = EvaluationProgress(progress)
     try:
+        display.preparing(config.planned_graphs)
         prepared = prepare(config, loader)
         run["preparation_seconds"] = time.perf_counter() - started
         run["artifact_sha256"] = export_prepared(output, prepared)
@@ -166,6 +172,7 @@ async def run_experiment(
         run["expected_calls"] = expected
         if not expected:
             raise ValueError("No questions generated; inspect preparation.json before executing")
+        display.start(len(prepared.graphs), len(prepared.examples), config.run.repetitions)
         run["status"] = "running"
         _write_json(output / "run.json", run)
         if client is None:
@@ -209,6 +216,7 @@ async def run_experiment(
                         stream.write(_json(row) + "\n")
                         stream.flush()
                         rows.append(row)
+                        display.advance(correct=row["correct"], status=row["status"])
         run["status"] = "completed"
         return summarize(rows, expected_calls=expected, preparation=prepared.summary())
     except BaseException as exc:
@@ -226,3 +234,4 @@ async def run_experiment(
             summary["run_status"] = run["status"]
             summary["execution_seconds"] = run["execution_seconds"]
             _write_json(output / "summary.json", summary)
+        display.finish(run["status"])

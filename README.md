@@ -6,8 +6,10 @@ The current tasks are adjacency and shortest-distance threshold decisions. There
 
 ## 1. Configuration
 
-- [configs/pilot.yaml](configs/pilot.yaml): four real networks, 16/32/64 nodes, five subgraphs per source and size.
-- [configs/comprehensive.yaml](configs/comprehensive.yaml): four real networks, 32/64/128 nodes, twenty subgraphs per source and size, and distance thresholds 2/3/4/6. See the [expanded evaluation protocol](docs/comprehensive.md) for verified coverage and limitations.
+- [configs/adjacency.yaml](configs/adjacency.yaml): **adjacency only**, 960 planned/generated questions.
+- [configs/distance_threshold.yaml](configs/distance_threshold.yaml): **distance threshold only**, 3,840 planned / 3,492 generated questions across thresholds 2/3/4/6.
+- Both single-task configurations use four real networks, 32/64/128 nodes, and twenty subgraphs per source and size. Each has its own call ceiling and output directory.
+- [configs/pilot.yaml](configs/pilot.yaml) and [configs/comprehensive.yaml](configs/comprehensive.yaml) remain as historical mixed-task configurations for reproducing earlier runs. Prefer the single-task configurations for new runs. See the [expanded evaluation protocol](docs/comprehensive.md) for coverage and limitations.
 - [Dataset sources and download instructions](data/real/README.md). Benchmark runs never download data implicitly.
 
 Experiment configurations use **YAML** (`.yaml` / `.yml`) with a strict PyYAML SafeLoader subclass. Duplicate or non-string keys, unsafe object tags, multiple documents, and merge keys (`<<`) are rejected. Unknown fields, duplicate sources/sizes, odd question counts, and invalid values also fail explicitly. Quote strings to avoid implicit YAML type conversion. Legacy TOML experiment configurations are not supported; Python packaging still uses [pyproject.toml](pyproject.toml).
@@ -45,21 +47,33 @@ python -m pip install -e .
 
 Make sure the selected raw datasets have been downloaded. Set `TYPESAFE_API_KEY` securely in your terminal environment; do not place credentials in YAML, source code, chat, or logs.
 
-Run the pilot:
+Run adjacency evaluation only:
 
 ```bash
-python run_benchmark.py --config configs/pilot.yaml --output results/pilot-live-001
+python run_benchmark.py --config configs/adjacency.yaml
 ```
 
-For the expanded, harder evaluation after verifying API access:
+Run distance-threshold evaluation only:
 
 ```bash
-python run_benchmark.py --config configs/comprehensive.yaml --output results/comprehensive-live-001
+python run_benchmark.py --config configs/distance_threshold.yaml
 ```
 
-The expanded configuration plans at most 4,800 calls; a local audit generated 4,452 balanced questions across 240 real-network subgraphs. This is substantially larger than the previously completed eight-call smoke run. The removed smoke configuration is not required by the runner or tests.
+The default output directories are `results/adjacency-v1` and `results/distance-threshold-v1`. Use `--output` with a new directory when repeating a run. Each directory contains its own accuracy, latency, coverage, and attempt logs.
+
+Splitting tasks does not change graph sampling, anonymous IDs, questions, labels, or the requested model. Both configurations reuse the comprehensive seed and sampling settings; their generated records were verified against the corresponding subsets of the completed mixed run. Their union contains the same 4,452 questions. Full request-file hashes differ because each file now contains only one task. Existing results remain valid; merely changing configuration organization does not require rerunning paid predictions. Running either command again does make new API calls.
+
+To disable adjacency, set `tasks.adjacency_questions` to 0. To disable distance questions, set `tasks.distance_questions_per_threshold` to 0 and `tasks.distance_thresholds` to an empty list. Multiple thresholds are difficulty levels within one distance task, not separate task types. To evaluate just one threshold, retain only that value in the distance list and adjust the call ceiling if desired. The loader still accepts historical mixed configurations for compatibility.
 
 These commands **prepare the data and immediately run Jev evaluation**. No additional execution flag is required. Configuration validation, source checksum verification, ground-truth validation, and the call ceiling remain enforced.
+
+### Terminal progress
+
+Progress is enabled by default. A preparation message appears while loading graphs, sampling, and verifying labels; this stage has no percentage or ETA. Evaluation then displays a `tqdm` progress bar with finalized attempts / actual total calls, percentage, elapsed time, estimated remaining time, calls per second, running accuracy, and failures. The total is **generated questions × repetitions**, not the planned call ceiling. Display refreshes are throttled to approximately once per second during calls, with a final update on completion or abort. ETA is an estimate based on observed throughput, not a guarantee.
+
+Accuracy includes all recorded attempts, including failed or interrupted calls. A failed request advances progress because it was attempted; it does not count as a correct answer. Aborted runs retain partial progress and print an aborted status rather than claiming completion. Preparation and evaluation timings remain separate in the saved artifacts.
+
+Progress goes to **stderr**; stdout remains the final JSON summary. Add `--no-progress` to suppress the display, especially when redirecting stderr to a plain log file. Library calls to `run_experiment()` stay quiet unless passed `progress=True`. No credentials, provider error bodies, or question payloads are printed by the progress display. This feature does not change sampling, requests, retries, or result schemas.
 
 [run_benchmark.py](run_benchmark.py) is the recommended script entry point for a repository checkout. It delegates to the existing CLI without duplicating benchmark logic or modifying the import path. Module-based invocation remains supported, but is not required; neither launch style changes evaluation behavior or constitutes a package release.
 
@@ -103,6 +117,8 @@ Labels are generated with BFS. Before export, the final anonymous payload is rec
 ## 5. Artifacts and metrics
 
 Each run writes to its own directory; local results are Git-ignored:
+
+JSON artifacts use two-space indentation for readability. JSONL artifacts retain one compact record per line for streaming and incremental logging. This formatting applies to new runs; existing artifacts are not rewritten, preserving their recorded hashes.
 
 | Artifact | Contents |
 |---|---|

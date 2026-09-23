@@ -58,6 +58,24 @@ def path_loader():
 
 
 class ConfigTests(unittest.TestCase):
+    def test_single_task_templates_preserve_shared_sampling_and_budgets(self):
+        combined = load_config(TEMPLATE.with_name("comprehensive.yaml"))
+        adjacency = load_config(TEMPLATE.with_name("adjacency.yaml"))
+        distance = load_config(TEMPLATE.with_name("distance_threshold.yaml"))
+        for config in (adjacency, distance):
+            self.assertEqual(config.data, combined.data)
+            self.assertEqual(config.sampling, combined.sampling)
+            self.assertEqual(config.model, combined.model)
+            self.assertEqual(config.run.seed, combined.run.seed)
+            self.assertEqual(config.run.repetitions, combined.run.repetitions)
+            self.assertEqual(config.run.max_calls, config.planned_questions)
+        self.assertEqual(adjacency.tasks, TaskConfig(4, 0, ()))
+        self.assertEqual(distance.tasks, TaskConfig(0, 4, (2, 3, 4, 6)))
+        self.assertEqual(adjacency.planned_questions, 960)
+        self.assertEqual(distance.planned_questions, 3840)
+        self.assertEqual(adjacency.planned_questions + distance.planned_questions, combined.planned_questions)
+        self.assertEqual(len({c.run.output_dir for c in (combined, adjacency, distance)}), 3)
+
     def test_example_and_path_resolution(self):
         config = load_config(TEMPLATE)
         self.assertEqual(config.planned_graphs, 60)
@@ -138,6 +156,21 @@ class ConfigTests(unittest.TestCase):
 class PreparationTests(unittest.TestCase):
     def setUp(self):
         self.config = config_for(Path("/unused"))
+
+    def test_split_tasks_match_combined_graphs_requests_and_labels(self):
+        combined_config = replace(self.config, tasks=TaskConfig(4, 4, (2, 3)))
+        combined = prepare(combined_config, path_loader())
+        union = []
+        for task, tasks in (("adjacency", TaskConfig(4, 0, ())),
+                            ("distance_threshold", TaskConfig(0, 4, (2, 3)))):
+            with self.subTest(task=task):
+                split = prepare(replace(combined_config, tasks=tasks), path_loader())
+                self.assertEqual(split.graphs, combined.graphs)
+                self.assertEqual(split.examples, [e for e in combined.examples if e.task == task])
+                self.assertTrue(all(cell["task"] == task for cell in split.summary()["strata"]))
+                union.extend(split.examples)
+        key = lambda e: e.request.request_id
+        self.assertEqual(sorted(union, key=key), sorted(combined.examples, key=key))
 
     def test_anonymization_removes_all_attributes_and_preserves_induced_edges(self):
         original = nx.Graph(title="private")
@@ -316,10 +349,16 @@ class JevYamlCliTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"TYPESAFE_API_KEY": "FAKE_YAML_CLI_KEY"}), \
              patch("src.clients.typesafe.httpx.AsyncClient", side_effect=mock_http_client), \
+                         patch("sys.stderr", new_callable=io.StringIO) as stderr, \
              patch("sys.stdout", new_callable=io.StringIO) as stdout:
             main(self.args())
         self.assertEqual(len(bodies), 8)
         self.assertEqual(json.loads(stdout.getvalue())["overall"]["attempts"], 8)
+        self.assertIn("Preparing", stderr.getvalue())
+        self.assertIn("8/8", stderr.getvalue())
+        self.assertIn("accuracy=50.00%", stderr.getvalue())
+        self.assertIn("Run completed", stderr.getvalue())
+        self.assertNotIn("FAKE_YAML_CLI_KEY", stderr.getvalue())
         summary = json.loads((self.output / "summary.json").read_text())
         self.assertEqual(summary["run_status"], "completed")
         self.assertEqual(summary["overall"]["accuracy"], 0.5)
@@ -330,6 +369,14 @@ class JevYamlCliTests(unittest.TestCase):
         self.assertEqual(run["requested_model"], "jev-offline-requested")
         for path in self.output.iterdir():
             self.assertNotIn("FAKE_YAML_CLI_KEY", path.read_text())
+
+    def test_no_progress_flag_disables_display(self):
+        with patch("src.benchmark.runner.create_client", return_value=FakeClient()), \
+             patch("sys.stderr", new_callable=io.StringIO) as stderr, \
+             patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            main(self.args() + ["--no-progress"])
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue())["completed_calls"], 8)
 
     def test_removed_execute_flag_is_rejected(self):
         with patch("sys.stderr", new_callable=io.StringIO), \
@@ -342,12 +389,14 @@ class JevYamlCliTests(unittest.TestCase):
 
     def test_yaml_cli_live_without_key_fails_before_http(self):
         with patch.dict(os.environ, {}, clear=True), \
+             patch("sys.stderr", new_callable=io.StringIO) as stderr, \
              patch("src.clients.typesafe.httpx.AsyncClient", side_effect=AssertionError("No HTTP")):
             with self.assertRaisesRegex(ValueError, "TYPESAFE_API_KEY"):
                 main(self.args())
         run = json.loads((self.output / "run.json").read_text())
         self.assertEqual(run["status"], "aborted")
         self.assertEqual(run["completed_calls"], 0)
+        self.assertIn("Run aborted: 0 attempts, accuracy=n/a", stderr.getvalue())
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
@@ -359,10 +408,69 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
     def read(self, name):
         return json.loads((self.config.run.output_dir / name).read_text())
 
+    async def test_json_artifacts_are_indented_but_jsonl_stays_one_record_per_line(self):
+        await run_experiment(self.config, client=FakeClient(), loader=path_loader())
+        output = self.config.run.output_dir
+        for path in output.glob("*.json"):
+            with self.subTest(artifact=path.name):
+                text = path.read_text(encoding="utf-8")
+                expected = json.dumps(json.loads(text), ensure_ascii=False, allow_nan=False,
+                                      sort_keys=True, indent=2) + "\n"
+                self.assertEqual(text, expected)
+                self.assertGreater(len(text.splitlines()), 1)
+        counts = {"requests.jsonl": 8, "labels.jsonl": 8, "graphs.jsonl": 2, "attempts.jsonl": 8}
+        for name, count in counts.items():
+            with self.subTest(artifact=name):
+                lines = (output / name).read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(lines), count)
+                self.assertTrue(all(isinstance(json.loads(line), dict) for line in lines))
+
+    async def test_progress_uses_generated_calls_times_repetitions_and_counts_failures(self):
+        config = replace(self.config, run=replace(self.config.run, repetitions=2))
+        # Only one distinct subgraph is available, so planned calls exceed actual calls.
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            result = await run_experiment(config, client=FakeClient("http"),
+                                          loader=fixture_loader(nx.path_graph(8)), progress=True)
+        text = stderr.getvalue()
+        self.assertEqual(result["expected_calls"], 8)
+        self.assertIn("Prepared 1 graphs, 4 questions x 2 repetitions.", text)
+        self.assertIn("8/8", text)
+        metrics = result["overall"]
+        self.assertIn(f"accuracy={metrics['accuracy']:.2%}, failures=1", text)
+        self.assertIn("Run completed: 8 attempts", text)
+
+    async def test_progress_retains_partial_counts_on_abort_or_cancellation(self):
+        for behavior, error, attempts in (("bug", RuntimeError, 2),
+                                           ("cancel", asyncio.CancelledError, 1)):
+            with self.subTest(behavior=behavior):
+                config = replace(self.config, run=replace(
+                    self.config.run, output_dir=self.config.run.output_dir / behavior))
+                with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    with self.assertRaises(error):
+                        await run_experiment(config, client=FakeClient(behavior),
+                                             loader=path_loader(), progress=True)
+                text = stderr.getvalue()
+                self.assertIn(f"{attempts}/8", text)
+                self.assertIn(f"Run aborted: {attempts} attempts", text)
+                self.assertIn("failures=1", text)
+                self.assertNotIn("PRIVATE_ERROR_TEXT", text)
+                self.assertNotIn("100%", text)
+
+    async def test_progress_handles_preparation_failure_without_fake_completion(self):
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            with self.assertRaisesRegex(ValueError, "No questions"):
+                await run_experiment(self.config, client=FakeClient(),
+                                     loader=fixture_loader(nx.complete_graph(30)), progress=True)
+        self.assertIn("Preparing", stderr.getvalue())
+        self.assertIn("Run aborted: 0 attempts, accuracy=n/a", stderr.getvalue())
+        self.assertNotIn("Evaluating", stderr.getvalue())
+
     async def test_default_runs_client_and_exports_separate_requests_and_labels(self):
         client = FakeClient()
-        with patch("src.benchmark.runner.create_client", return_value=client) as factory:
+        with patch("src.benchmark.runner.create_client", return_value=client) as factory, \
+             patch("sys.stderr", new_callable=io.StringIO) as stderr:
             result = await run_experiment(self.config, loader=path_loader())
+        self.assertEqual(stderr.getvalue(), "")
         factory.assert_called_once_with("typesafe", model="test-only-model", timeout_seconds=1.0)
         self.assertEqual(client.calls, 8)
         self.assertTrue(client.closed)
