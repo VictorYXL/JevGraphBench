@@ -8,7 +8,7 @@ from contextlib import AsyncExitStack
 from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
 import platform
@@ -80,6 +80,10 @@ def _metrics(rows: list[dict]) -> dict:
         "failure_rate": (count - len(success)) / count if count else None,
         "label_counts": dict(Counter(r["answer"] for r in rows)),
         "error_counts": dict(Counter(r["error_type"] for r in rows if r["status"] != "success")),
+        "diagnostic_counts": dict(Counter(r["diagnostic_code"] for r in rows
+                         if r["status"] != "success" and r.get("diagnostic_code"))),
+        "finish_reason_counts": dict(Counter(r["finish_reason"] for r in rows
+                            if r["status"] != "success" and r.get("finish_reason"))),
         "resolved_models": dict(Counter(r["resolved_model"] for r in success)),
         "latency_all": _latency(rows), "latency_success": _latency(success),
         "token_usage": usage, "brier_yes": statistics.mean(brier) if brier else None,
@@ -136,11 +140,15 @@ async def run_experiment(
     client: BaseDecisionClient | None = None,
     loader: Callable[..., GraphDataset] = load_graph,
     progress: bool = False,
+    prepared_input: PreparedBenchmark | None = None,
 ) -> dict:
     """Prepare samples and run evaluation. Owns/closes the client once entered.
 
     An injected client is only for tests/custom callers; the CLI never offers a
     mock model whose numbers could be mistaken for actual Jev performance.
+    A trusted orchestrator may provide prevalidated, pinned prepared_input to
+    avoid CPU-bound regeneration blocking other asynchronous model lanes.
+    The orchestrator must verify the exported artifacts before any prediction.
     Progress is opt-in for library callers and goes to stderr, not artifacts.
     """
     if config.planned_questions * config.run.repetitions > config.run.max_calls:
@@ -153,11 +161,25 @@ async def run_experiment(
         "schema_version": 1, "status": "preparing",
         "config_sha256": config.sha256, "started_at_utc": _utc(),
         "requested_model": config.model.model, "provider": config.model.provider,
+        "model_settings": config.model.client_kwargs(),
+        "response_protocol": ("native-choice" if config.model.provider == "typesafe" else
+                      "answer-only-v1" if config.model.output_format == "answer_only" else
+                      "json-choice-v1"),
         "versions": {"python": platform.python_version(), "networkx": version("networkx"),
                      "httpx": version("httpx"), "pyyaml": version("PyYAML")},
-        "protocol": "topology-choice-v1", "concurrency": 1, "retries": 0,
+        "protocol": "topology-choice-v1", "concurrency": 1,
+        "retries": None if config.model.provider == "github_copilot" else 0,
+        "adapter_retries": 0,
+        "sdk_retries": "not_controlled" if config.model.provider == "github_copilot" else "not_applicable",
         "injected_client": client is not None,
     }
+    if config.model.provider == "github_copilot":
+        try:
+            run["versions"]["github-copilot-sdk"] = version("github-copilot-sdk")
+        except PackageNotFoundError:
+            run["versions"]["github-copilot-sdk"] = None
+    if prepared_input is not None:
+        run["injected_prepared"] = True
     _write_json(output / "run.json", run)
     rows: list[dict] = []
     prepared = None
@@ -165,9 +187,18 @@ async def run_experiment(
     display = EvaluationProgress(progress)
     try:
         display.preparing(config.planned_graphs)
-        prepared = prepare(config, loader)
+        prepared = prepare(config, loader) if prepared_input is None else prepared_input
+        if (prepared.planned_graphs != config.planned_graphs
+                or prepared.planned_questions != config.planned_questions
+                or len(prepared.examples) * config.run.repetitions > config.run.max_calls):
+            raise ValueError("Prepared input does not match the configured budget")
         run["preparation_seconds"] = time.perf_counter() - started
-        run["artifact_sha256"] = export_prepared(output, prepared)
+        if prepared_input is None:
+            run["artifact_sha256"] = export_prepared(output, prepared)
+        else:
+            # Each lane exports to its own directory. Keep large JSON encoding
+            # and disk writes off the event loop while sibling requests run.
+            run["artifact_sha256"] = await asyncio.to_thread(export_prepared, output, prepared)
         expected = len(prepared.examples) * config.run.repetitions
         run["expected_calls"] = expected
         if not expected:
@@ -176,12 +207,14 @@ async def run_experiment(
         run["status"] = "running"
         _write_json(output / "run.json", run)
         if client is None:
-            # TypeSafeClient reads TYPESAFE_API_KEY internally, never from config.
-            client = create_client(config.model.provider, model=config.model.model,
-                                   timeout_seconds=config.model.timeout_seconds)
+            # Adapters read credentials internally, never from configuration.
+            client = create_client(config.model.provider, **config.model.client_kwargs())
         run_started = time.perf_counter()
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(client)
+            initialization_started = time.perf_counter()
+            await asyncio.wait_for(client.initialize(), timeout=config.model.timeout_seconds)
+            run["initialization_seconds"] = time.perf_counter() - initialization_started
             stream = stack.enter_context((output / "attempts.jsonl").open("x", encoding="utf-8"))
             for repetition in range(config.run.repetitions):
                 for example in prepared.examples:
@@ -191,7 +224,8 @@ async def run_experiment(
                            "selected_option_id": None, "resolved_model": None,
                            "probabilities": None, "probability_kind": None, "confidence": None,
                            "usage": {"input_tokens": None, "output_tokens": None, "reasoning_tokens": None},
-                           "error_type": None, "http_status": None}
+                           "error_type": None, "http_status": None,
+                           "diagnostic_code": None, "finish_reason": None}
                     call_started = time.perf_counter()
                     try:
                         response = await asyncio.wait_for(client.predict(example.request),
@@ -206,6 +240,16 @@ async def run_experiment(
                     except (DecisionClientError, TimeoutError) as exc:
                         # Never save exception text, raw provider bodies or credentials.
                         row.update(error_type=type(exc).__name__, http_status=getattr(exc, "status_code", None))
+                        if isinstance(exc, InvalidResponseError):
+                            # Revalidate at the persistence boundary: custom clients
+                            # can mutate exception attributes after construction.
+                            safe = InvalidResponseError(
+                                "", diagnostic_code=exc.diagnostic_code,
+                                finish_reason=exc.finish_reason, usage=exc.usage,
+                            )
+                            row.update(diagnostic_code=safe.diagnostic_code, finish_reason=safe.finish_reason)
+                            if safe.usage is not None:
+                                row["usage"] = asdict(safe.usage)
                     except BaseException as exc:
                         # A cancelled/interrupted request may already be billable.
                         # Retain this attempt, but do not swallow cancellation or bugs.

@@ -1,7 +1,8 @@
 """Deterministic induced subgraphs and balanced questions, with offline labels.
 
 Only freshly constructed anonymous topology is ever placed in DecisionRequest.
-This pilot sampler does NOT produce independent or train/test-disjoint graphs.
+The default sampler permits overlap. Pinned exclusions enable a source-node-
+disjoint development pool, with mutually disjoint samples inside that pool.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import networkx as nx
 from src.clients.base import DecisionOption, DecisionRequest
 from src.datasets import GraphDataset, load_graph
 from .config import BenchmarkConfig
+from .presentation import graph_from_state, question_for, state_for
 
 
 @dataclass(frozen=True)
@@ -136,16 +138,11 @@ def _questions(graph: nx.Graph, graph_id: str, dataset: str, config: BenchmarkCo
         rng.shuffle(chosen)
         for index, (u, v, answer) in enumerate(chosen):
             request_id = f"{graph_id}-{task}-{threshold}-{index:04d}"
-            prefix = "Use only the given undirected, unweighted graph. "
-            question = prefix + (
-                f"Are nodes {u} and {v} directly connected by an edge?"
-                if threshold is None else
-                f"Is there a path from node {u} to node {v} using at most {threshold} edges?"
-            )
+            question = question_for(u, v, threshold, config.presentation)
             # Explicit allowlist: never serialize a source graph or label record.
             request = DecisionRequest(
                 request_id=request_id,
-                state={"nodes": list(graph.nodes()), "edges": [list(edge) for edge in graph.edges()]},
+                state=state_for(graph, config.presentation),
                 question=question,
                 options=(DecisionOption("yes"), DecisionOption("no")),
             )
@@ -163,22 +160,13 @@ def verify_examples(examples: list[Example]) -> None:
     seen = set()
     for example in examples:
         state = example.request.state
-        if not isinstance(state, dict) or set(state) != {"nodes", "edges"}:
-            raise ValueError("Unexpected model-visible fields")
-        if state["nodes"] != list(range(example.node_count)):
-            raise ValueError("Nodes must be anonymous contiguous integer IDs")
-        if any(type(n) is not int for n in state["nodes"]) or any(
-            not isinstance(e, list) or len(e) != 2 or any(type(n) is not int or n not in state["nodes"] for n in e)
-            or e[0] == e[1] for e in state["edges"]
-        ):
-            raise ValueError("Invalid topology payload")
         key = json.dumps(state, sort_keys=True)
         if key not in cache:
-            graph = nx.Graph()
-            graph.add_nodes_from(state["nodes"])
-            graph.add_edges_from(state["edges"])
+            graph = graph_from_state(state, example.node_count)
             cache[key] = (graph, dict(nx.floyd_warshall(graph)))
         graph, distances = cache[key]
+        if len(graph) != example.node_count:
+            raise ValueError("Invalid node count")
         distance = distances[example.u][example.v]
         truth = graph.has_edge(example.u, example.v) if example.task == "adjacency" else distance <= example.threshold
         if example.answer != ("yes" if truth else "no") or example.distance != distance:
@@ -188,7 +176,38 @@ def verify_examples(examples: list[Example]) -> None:
         seen.add(example.request.request_id)
 
 
+def excluded_source_nodes(config: BenchmarkConfig) -> dict[str, set[int]]:
+    """Read only the pinned graph artifact; never send source IDs to a model."""
+    exclusion = config.sampling.exclude_graphs
+    if exclusion is None:
+        return {}
+    body = exclusion.path.read_bytes()
+    if hashlib.sha256(body).hexdigest() != exclusion.sha256:
+        raise ValueError("Prior graph artifact hash mismatch")
+    excluded: dict[str, set[int]] = {}
+    seen = set()
+    try:
+        for line in body.splitlines():
+            row = json.loads(line)
+            name, graph_id = row["dataset"], row["graph_id"]
+            nodes = row["original_ids_by_anonymous_id"]
+            if (not isinstance(name, str) or not isinstance(graph_id, str)
+                    or not isinstance(nodes, list) or not nodes
+                    or any(type(n) is not int for n in nodes) or len(set(nodes)) != len(nodes)
+                    or type(row["node_count"]) is not int or row["node_count"] != len(nodes)
+                    or (name, graph_id) in seen):
+                raise ValueError()
+            seen.add((name, graph_id))
+            excluded.setdefault(name, set()).update(nodes)
+        if not set(config.data.datasets) <= excluded.keys():
+            raise ValueError()
+    except (ValueError, TypeError, KeyError, UnicodeError):
+        raise ValueError("Invalid prior graph artifact") from None
+    return excluded
+
+
 def prepare(config: BenchmarkConfig, loader: Callable[..., GraphDataset] = load_graph) -> PreparedBenchmark:
+    exclusions = excluded_source_nodes(config)
     result = PreparedBenchmark([], [], [], [], config.planned_graphs, config.planned_questions)
     tasks = [("adjacency", None, config.tasks.adjacency_questions)] + [
         ("distance_threshold", k, config.tasks.distance_questions_per_threshold)
@@ -204,6 +223,9 @@ def prepare(config: BenchmarkConfig, loader: Callable[..., GraphDataset] = load_
     for dataset in config.data.datasets:
         loaded = loader(dataset, data_dir=config.data.data_dir)
         source = loaded.graph
+        blocked = set(exclusions.get(dataset, ()))
+        if not blocked <= set(source):
+            raise ValueError("Prior source nodes are absent from the loaded graph")
         result.sources.append({"source": asdict(loaded.source), "raw_sha256": loaded.raw_sha256,
                                "stats": asdict(loaded.stats)})
         components = list(nx.connected_components(source))
@@ -211,16 +233,23 @@ def prepare(config: BenchmarkConfig, loader: Callable[..., GraphDataset] = load_
             eligible = sorted(n for component in components if len(component) >= count for n in component)
             used: set[tuple[int, ...]] = set()
             for index in range(config.sampling.samples_per_size):
+                sampling_source = source
+                if config.sampling.exclude_graphs is not None:
+                    sampling_source = source.subgraph(set(source) - blocked)
+                    remaining_components = nx.connected_components(sampling_source)
+                    eligible = sorted(n for c in remaining_components if len(c) >= count for n in c)
                 graph_id = f"{dataset}-n{count}-s{index:04d}"
                 rng = _rng(config.run.seed, graph_id, "sampling")
                 nodes = None
                 attempts = 0
                 if eligible:
                     for attempts in range(1, config.sampling.max_attempts + 1):
-                        candidate = _sample_nodes(source, eligible, count, rng)
+                        candidate = _sample_nodes(sampling_source, eligible, count, rng)
                         if tuple(candidate) not in used:
                             nodes = candidate
                             used.add(tuple(candidate))
+                            if config.sampling.exclude_graphs is not None:
+                                blocked.update(candidate)
                             break
                 if nodes is None:
                     result.issues.append({"graph_id": graph_id, "dataset": dataset,

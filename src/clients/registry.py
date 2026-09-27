@@ -10,7 +10,11 @@ from .base import BaseDecisionClient
 
 
 ClientType = TypeVar("ClientType", bound=type[BaseDecisionClient])
-_BUILTINS = {"typesafe": ("src.clients.typesafe", "TypeSafeClient")}
+_BUILTINS = {
+    "typesafe": ("src.clients.typesafe", "TypeSafeClient"),
+    "github_copilot": ("src.clients.github_copilot_client", "GitHubCopilotClient"),
+    "vllm": ("src.clients.vllm_client", "VLLMClient"),
+}
 _REGISTERED: dict[str, type[BaseDecisionClient]] = {}
 
 

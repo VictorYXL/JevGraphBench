@@ -160,7 +160,7 @@ class RegistryTests(unittest.IsolatedAsyncioTestCase):
         async with registry.create_client("STUB", model="fixture") as client:
             self.assertIsInstance(client, StubClient)
             self.assertEqual(client.model, "fixture")
-        self.assertEqual(registry.available_clients(), ("stub", "typesafe"))
+        self.assertEqual(registry.available_clients(), ("github_copilot", "stub", "typesafe", "vllm"))
 
     def test_duplicate_and_invalid_registration(self) -> None:
         registry.register_client("stub")(StubClient)
@@ -399,6 +399,26 @@ class TypeSafeTests(unittest.IsolatedAsyncioTestCase):
             body["answers"]["decision"]["probabilities"]["yes"] = value
             with self.subTest(value=value), self.assertRaises(InvalidResponseError):
                 TypeSafeClient._parse_response(make_request(), body)
+
+    def test_native_failure_diagnostics_distinguish_validation_stages(self) -> None:
+        cases = (
+            ({"model": ""}, {}, "invalid_model"),
+            ({"answers": {}}, {}, "invalid_native_answer"),
+            ({}, {"choice": "unknown"}, "invalid_choice"),
+            ({}, {"probabilities": {"yes": 1}}, "invalid_probabilities"),
+            ({}, {"probabilities": {"yes": 0.6, "no": 0.2}}, "invalid_probability_sum"),
+            ({}, {"choice": "no"}, "choice_probability_mismatch"),
+            ({}, {"confidence": None}, "invalid_confidence"),
+            ({"usage": None}, {}, "invalid_usage"),
+        )
+        for body_change, answer_change, expected in cases:
+            body = make_body()
+            body["answers"]["decision"].update(answer_change)
+            body.update(body_change)
+            with self.subTest(expected=expected), self.assertRaises(InvalidResponseError) as caught:
+                TypeSafeClient._parse_response(make_request(), body)
+            self.assertEqual(caught.exception.diagnostic_code, expected)
+            self.assertEqual(caught.exception.raw_output, body)
 
     async def test_missing_counts_are_unknown_and_ties_are_allowed(self) -> None:
         body = make_body()

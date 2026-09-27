@@ -1,4 +1,4 @@
-"""Run Jev evaluation with python -m src.benchmark --config configs/pilot.yaml."""
+"""Run configured graph evaluation with python -m src.benchmark --config PATH."""
 
 import argparse
 import asyncio
@@ -11,7 +11,7 @@ from .runner import run_experiment
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Run topology-only Jev evaluation using TYPESAFE_API_KEY")
+    parser = argparse.ArgumentParser(description="Run topology-only graph evaluation with the configured model provider")
     parser.add_argument("--config", type=Path, required=True, help="YAML benchmark configuration (.yaml/.yml)")
     parser.add_argument("--output", type=Path, help="Override output directory (relative to current directory)")
     parser.add_argument("--no-progress", action="store_true", help="Disable progress display on stderr")

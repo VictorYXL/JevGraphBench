@@ -123,15 +123,45 @@ class ProviderHTTPError(DecisionClientError):
 
 
 class InvalidResponseError(DecisionClientError):
-    """Malformed provider output, with its original body available for auditing.
+    """Malformed output with allowlisted diagnostics safe for failure artifacts.
 
-    raw_output is not interpolated into the error message. Review/redact it before
-    publishing, as a provider might echo sensitive input in a response body.
+    Message and raw_output remain available in memory for compatibility, but must
+    never be persisted. Unknown diagnostics become invalid_response/None; invalid
+    usage is discarded rather than coerced or partially trusted.
     """
 
-    def __init__(self, message: str, *, raw_output: Any = None) -> None:
+    _DIAGNOSTIC_CODES = frozenset({
+        "invalid_response", "missing_answer", "invalid_json", "invalid_choice",
+        "incomplete_reasoning", "unexpected_reasoning", "invalid_usage",
+        "invalid_finish_reason", "finish_length", "finish_tool_calls",
+        "finish_function_call", "finish_content_filter", "finish_error", "finish_abort",
+        "invalid_model", "invalid_native_answer", "invalid_probabilities",
+        "invalid_probability_sum", "choice_probability_mismatch", "invalid_confidence",
+    })
+    _FINISH_REASONS = frozenset({
+        "stop", "length", "tool_calls", "function_call", "content_filter", "error", "abort",
+    })
+
+    def __init__(
+        self, message: str, *, raw_output: Any = None,
+        diagnostic_code: str = "invalid_response", finish_reason: str | None = None,
+        usage: TokenUsage | None = None,
+    ) -> None:
         super().__init__(message)
         self.raw_output = raw_output
+        self.diagnostic_code = (
+            diagnostic_code if type(diagnostic_code) is str
+            and diagnostic_code in self._DIAGNOSTIC_CODES else "invalid_response"
+        )
+        self.finish_reason = (
+            finish_reason if type(finish_reason) is str
+            and finish_reason in self._FINISH_REASONS else None
+        )
+        self.usage = None
+        if type(usage) is TokenUsage:
+            values = (usage.input_tokens, usage.output_tokens, usage.reasoning_tokens)
+            if all(v is None or (type(v) is int and v >= 0) for v in values):
+                self.usage = TokenUsage(*values)
 
 
 class BaseDecisionClient(ABC):
@@ -164,6 +194,9 @@ class BaseDecisionClient(ABC):
         for request in requests:
             self.validate_request(request)
         return [await self.predict(request) for request in requests]
+
+    async def initialize(self) -> None:
+        """Optional preflight before evaluation; must not send benchmark questions."""
 
     async def aclose(self) -> None:
         """Override when the adapter owns connections or model resources."""

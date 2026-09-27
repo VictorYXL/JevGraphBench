@@ -59,22 +59,21 @@ def path_loader():
 
 class ConfigTests(unittest.TestCase):
     def test_single_task_templates_preserve_shared_sampling_and_budgets(self):
-        combined = load_config(TEMPLATE.with_name("comprehensive.yaml"))
         adjacency = load_config(TEMPLATE.with_name("adjacency.yaml"))
         distance = load_config(TEMPLATE.with_name("distance_threshold.yaml"))
+        self.assertEqual(adjacency.data, distance.data)
+        self.assertEqual(adjacency.sampling, distance.sampling)
+        self.assertEqual(adjacency.model, distance.model)
+        self.assertEqual(adjacency.run.seed, distance.run.seed)
+        self.assertEqual(adjacency.run.repetitions, distance.run.repetitions)
         for config in (adjacency, distance):
-            self.assertEqual(config.data, combined.data)
-            self.assertEqual(config.sampling, combined.sampling)
-            self.assertEqual(config.model, combined.model)
-            self.assertEqual(config.run.seed, combined.run.seed)
-            self.assertEqual(config.run.repetitions, combined.run.repetitions)
             self.assertEqual(config.run.max_calls, config.planned_questions)
         self.assertEqual(adjacency.tasks, TaskConfig(4, 0, ()))
         self.assertEqual(distance.tasks, TaskConfig(0, 4, (2, 3, 4, 6)))
         self.assertEqual(adjacency.planned_questions, 960)
         self.assertEqual(distance.planned_questions, 3840)
-        self.assertEqual(adjacency.planned_questions + distance.planned_questions, combined.planned_questions)
-        self.assertEqual(len({c.run.output_dir for c in (combined, adjacency, distance)}), 3)
+        self.assertEqual(adjacency.planned_questions + distance.planned_questions, 4800)
+        self.assertNotEqual(adjacency.run.output_dir, distance.run.output_dir)
 
     def test_example_and_path_resolution(self):
         config = load_config(TEMPLATE)
@@ -140,11 +139,11 @@ class ConfigTests(unittest.TestCase):
                         load_config(path)
                     self.assertNotIn("PRIVATE", str(caught.exception))
 
-    def test_comprehensive_yaml_and_legacy_format_rejection(self):
-        config = load_config(TEMPLATE.with_name("comprehensive.yaml"))
+    def test_distance_yaml_and_legacy_format_rejection(self):
+        config = load_config(TEMPLATE.with_name("distance_threshold.yaml"))
         self.assertEqual(config.planned_graphs, 240)
-        self.assertEqual(config.planned_questions, 4800)
-        self.assertEqual(config.run.max_calls, 4800)
+        self.assertEqual(config.planned_questions, 3840)
+        self.assertEqual(config.run.max_calls, 3840)
         self.assertEqual(config.sampling.node_counts, (32, 64, 128))
         self.assertEqual(config.tasks.distance_thresholds, (2, 3, 4, 6))
         self.assertEqual(config.model.provider, "typesafe")

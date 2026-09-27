@@ -9,6 +9,9 @@ description = "Graph decision benchmarking clients for Jev and Jev-like models"
 requires-python = ">=3.11"
 dependencies = ["httpx>=0.27,<0.29", "networkx>=3.4,<4", "PyYAML>=6.0.2,<7", "tqdm>=4.66,<5"]
 
+[project.optional-dependencies]
+copilot = ["github-copilot-sdk==1.0.14"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src", "src.*"]

@@ -134,12 +134,15 @@ class TypeSafeClient(BaseDecisionClient):
 
     @classmethod
     def _parse_response(cls, request: DecisionRequest, body: Any) -> DecisionResponse:
+        diagnostic_code = "invalid_response"
         try:
             if not isinstance(body, dict):
                 raise ValueError("response must be an object")
+            diagnostic_code = "invalid_model"
             model = body.get("model")
             if not isinstance(model, str) or not model.strip():
                 raise ValueError("response model is missing or invalid")
+            diagnostic_code = "invalid_native_answer"
             answers = body.get("answers")
             if not isinstance(answers, dict) or set(answers) != {cls._QUESTION_ID}:
                 raise ValueError("response must contain exactly the requested answer")
@@ -147,9 +150,11 @@ class TypeSafeClient(BaseDecisionClient):
             if not isinstance(answer, dict) or answer.get("type") != "choice":
                 raise ValueError("expected a choice answer")
             ids = [option.id for option in request.options]
+            diagnostic_code = "invalid_choice"
             selected = answer.get("choice")
             if not isinstance(selected, str) or selected not in ids:
                 raise ValueError("choice is not a supplied option")
+            diagnostic_code = "invalid_probabilities"
             raw_probs = answer.get("probabilities")
             if not isinstance(raw_probs, dict) or set(raw_probs) != set(ids):
                 raise ValueError("probabilities must cover exactly the supplied options")
@@ -158,11 +163,15 @@ class TypeSafeClient(BaseDecisionClient):
                 for option_id in ids
             }
             # Allow floating-point rounding only; never silently renormalize.
+            diagnostic_code = "invalid_probability_sum"
             if not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0, abs_tol=1e-6):
                 raise ValueError("probabilities must sum to 1")
+            diagnostic_code = "choice_probability_mismatch"
             if probabilities[selected] + 1e-6 < max(probabilities.values()):
                 raise ValueError("choice does not have the highest probability")
+            diagnostic_code = "invalid_confidence"
             confidence = cls._probability(answer.get("confidence"), "confidence")
+            diagnostic_code = "invalid_usage"
             raw_usage = body.get("usage")
             if not isinstance(raw_usage, dict):
                 raise ValueError("usage must be an object")
@@ -183,7 +192,9 @@ class TypeSafeClient(BaseDecisionClient):
                 raw_output=body,
             )
         except ValueError as exc:
-            raise InvalidResponseError(str(exc), raw_output=body) from None
+            raise InvalidResponseError(
+                str(exc), raw_output=body, diagnostic_code=diagnostic_code
+            ) from None
 
     async def aclose(self) -> None:
         if not self._closed:
