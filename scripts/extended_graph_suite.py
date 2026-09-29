@@ -634,6 +634,38 @@ def report(root, models=None):
     return result
 
 
+def analyze(root, models=None):
+    """Read-only continuation diagnostics after the normal sealed-run replay."""
+    from src.benchmark.trajectory import analyze_trajectory
+
+    result = report(root, models)
+    root, _, instances, _ = load_plan(root)
+    constructions = {i["id"]: i for i in instances if i["kind"] == "optimization"}
+    for name, lane in result["models"].items():
+        if lane["status"] == "not_started":
+            lane["trajectory_analysis"] = {"status": "not_started", "episodes": []}
+            continue
+        episodes = []
+        for row in read_rows(root / "runs" / name / "scores.jsonl"):
+            if row["kind"] != "optimization":
+                continue
+            analysis = analyze_trajectory(constructions[row["instance_id"]], row["decisions"])
+            require(analysis["feasible"] == row["feasible"]
+                    and analysis["absolute_gap"] == row["absolute_gap"],
+                    "Trajectory diagnostics disagree with verified scores.")
+            analysis.update(query_count=row["query_count"], failure_count=row["failure_count"])
+            episodes.append(analysis)
+        require(len(episodes) == len(constructions), "Missing scheduled construction.")
+        lane["trajectory_analysis"] = {"status": "verified", "episodes": episodes}
+    result.update(
+        model_calls=0,
+        trajectory_definition="Privileged offline analysis of recorded choices, not oracle guidance. "
+                              "Step losses sum to final gap only for completed episodes; incomplete "
+                              "histories report an unavoidable prefix gap, not a final quality score.",
+    )
+    return result
+
+
 async def run_cli(root, models):
     """CLI-only SIGTERM cancellation lets active lanes seal their known prefixes."""
     loop, task = asyncio.get_running_loop(), asyncio.current_task()
@@ -652,7 +684,7 @@ async def run_cli(root, models):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("plan", "run", "report"):
+    for command in ("plan", "run", "report", "analyze"):
         child = commands.add_parser(command)
         child.add_argument("--root", type=Path, required=True)
         child.add_argument("--models", nargs="+", choices=MODELS)
@@ -677,6 +709,8 @@ def main(argv=None):
                           prior_pool=args.prior_pool)
         elif args.command == "run":
             result = asyncio.run(run_cli(args.root, args.models))
+        elif args.command == "analyze":
+            result = analyze(args.root, args.models)
         else:
             result = report(args.root, args.models)
         print(canonical(result))

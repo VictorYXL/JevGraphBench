@@ -1,0 +1,17 @@
+profile,task,first_step_loss,feasible,scheduled
+jev_action,tsp_construct,3,40,40
+qwen4_grammar,tsp_construct,22,40,40
+qwen9_grammar,tsp_construct,21,40,40
+qwen4_token_scores,tsp_construct,29,40,40
+jev_action,lt_influence_construct,8,40,40
+qwen4_grammar,lt_influence_construct,12,40,40
+qwen9_grammar,lt_influence_construct,24,40,40
+qwen4_token_scores,lt_influence_construct,26,40,40
+jev_action,community_bipartition_construct,12,40,40
+qwen4_grammar,community_bipartition_construct,10,40,40
+qwen9_grammar,community_bipartition_construct,23,40,40
+qwen4_token_scores,community_bipartition_construct,23,40,40
+jev_action,maxcut_construct,8,40,40
+qwen4_grammar,maxcut_construct,8,40,40
+qwen9_grammar,maxcut_construct,8,40,40
+qwen4_token_scores,maxcut_construct,7,40,40

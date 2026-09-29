@@ -621,6 +621,77 @@ class ExtendedSuiteTests(unittest.TestCase):
         with self.assertRaises(suite.Refusal):
             suite.report(self.root)
 
+    def test_analyze_is_offline_read_only_and_matches_verified_scores(self):
+        self.plan()
+        self.run_lane()
+        before = {p: (p.stat().st_mtime_ns, suite.digest(p))
+                  for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(suite, "create_client", side_effect=AssertionError("no inference")):
+            result = suite.analyze(self.root)
+        self.assertEqual(result["model_calls"], 0)
+        lane = result["models"]["jev"]
+        self.assertEqual(lane["by_task"], suite.report(self.root)["models"]["jev"]["by_task"])
+        self.assertEqual(lane["trajectory_analysis"]["status"], "verified")
+        episode, = lane["trajectory_analysis"]["episodes"]
+        self.assertEqual(episode["decisions"], ["B"] * 4)
+        self.assertEqual(episode["absolute_gap"], 3)
+        self.assertEqual(episode["unavoidable_gap"], 3)
+        self.assertEqual(episode["first_loss_step"], 2)
+        self.assertEqual(episode["failure_count"], 0)
+        self.assertEqual(sum(s["incremental_regret"] for s in episode["steps"]), 3)
+        after = {p: (p.stat().st_mtime_ns, suite.digest(p))
+                 for p in self.root.rglob("*") if p.is_file()}
+        self.assertEqual(before, after)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(suite.main(["analyze", "--root", str(self.root)]), 0)
+        self.assertEqual(json.loads(out.getvalue()), result)
+
+    def test_analyze_failed_prefix_does_not_become_a_complete_solution(self):
+        self.plan()
+
+        def factory(provider, **kwargs):
+            return FakeClient(kwargs["model"], lambda request, count:
+                              ClientTimeoutError("SECRET") if count == 3 else None)
+
+        self.run_lane(factory=factory)
+        result = suite.analyze(self.root)
+        lane = result["models"]["jev"]
+        episode, = lane["trajectory_analysis"]["episodes"]
+        self.assertEqual(episode["decisions"], ["B", "B"])
+        self.assertEqual(episode["status"], "incomplete")
+        self.assertFalse(episode["feasible"])
+        self.assertEqual(episode["failure_count"], 1)
+        self.assertEqual(episode["query_count"], 3)
+        self.assertEqual(episode["unavoidable_gap"], 1)
+        self.assertEqual(episode["first_loss_step"], 2)
+        self.assertIsNone(episode["objective"])
+        self.assertIsNone(episode["absolute_gap"])
+        self.assertEqual(lane["by_task"]["maxcut_construct"]["instances"], 1)
+        self.assertEqual(lane["by_task"]["maxcut_construct"]["feasible"], 0)
+        self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_analyze_unstarted_lane_has_no_fabricated_trajectory(self):
+        self.plan()
+        result = suite.analyze(self.root)
+        self.assertEqual(result["models"]["jev"], {
+            "status": "not_started",
+            "trajectory_analysis": {"status": "not_started", "episodes": []},
+        })
+
+    def test_analyze_refuses_unsealed_or_tampered_run_with_explicit_cli_error(self):
+        self.plan()
+        self.run_lane()
+        path = self.root / "runs" / "jev" / "scores.jsonl"
+        path.write_text(path.read_text().replace('"objective":1', '"objective":99'))
+        with self.assertRaises(suite.Refusal):
+            suite.analyze(self.root)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            self.assertEqual(suite.main(["analyze", "--root", str(self.root)]), 2)
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(json.loads(err.getvalue())["status"], "refused")
+
     def test_replay_rejects_requests_skips_extra_calls_and_bad_decisions(self):
         self.plan()
         self.run_lane()
