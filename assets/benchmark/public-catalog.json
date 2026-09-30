@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "retrieved_date": "2026-09-29",
+  "license_note": "No explicit redistribution license verified for original TSPLIB/OPTSICOM data. Do not redistribute raw data under the repository code license. The MaxCut mirror has an MIT notice, which does not establish licensing of third-party originals.",
+  "selection_note": "Seven main TSPLIB instances have n<255. eil51 is calibration only. Ten complete signed OPTSICOM Set2 instances have n=125,m=375; these replace, and are not cropped versions of, the prior paper's n=800 Set1 g1-g10.",
+  "distance_convention": "EUC_2D: binary-double coordinates, dx=x1-x2, dy=y1-y2, int(sqrt(dx*dx+dy*dy)+0.5). Do not substitute hypot, exact decimal, or bankers rounding. Official tsp225 tour costs3916 under this convention versus3921 under exact-decimal half-up.",
+  "maxcut_reference_provenance": {
+    "status": "historical source-reported best_known, not proven optimum or asserted current global BKS",
+    "as_of": "2016-08-16",
+    "revision": "9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76",
+    "readme_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/README.md",
+    "readme_quote": "The instances, best known values and best known solutions are located in `intances`, `bkvl` and `bksol` subdirectories respectively.",
+    "validation": "All ten pinned mirror graph files byte-match original OPTSICOM Set2 archive members. Every exact-named bksol witness was evaluated on primary bytes and reproduced the corresponding bkvl value. Witnesses establish feasibility; the README establishes the source-reported best-known label.",
+    "primary_alias_caveat": "The primary Set2 spreadsheet uses G54100-style aliases without a verified filename mapping. Attribute these exact-filename references to the pinned mirror, not an inferred primary alias."
+  },
+  "instances": [
+    {
+      "id": "kroA100", "task": "tsp_public", "role": "main", "dimension": 100, "edge_count": 4950, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroA100.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroA100.tsp.gz", "compression": "gzip",
+      "wire_sha256": "016cb494dcd766cc06531c12a9fa79bd348cb21f2b2bbb9edb864951e8de7aa5", "raw_sha256": "e103100c1cf31dfc06be95a9d04011b5a8753bb65a3339594ca34404e574bdf5",
+      "reference": {"value": 21282, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "kroA150", "task": "tsp_public", "role": "main", "dimension": 150, "edge_count": 11175, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroA150.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroA150.tsp.gz", "compression": "gzip",
+      "wire_sha256": "cf6ee4e5d9d1e98cf0c2916e68e60f710d29b1b4bf547abb690de74f2cf77aee", "raw_sha256": "acfeddc0cf4dd78ae69dd0c379b52b4031a4a8daa61a0cab3f46c1e3e2a616ba",
+      "reference": {"value": 26524, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "kroB100", "task": "tsp_public", "role": "main", "dimension": 100, "edge_count": 4950, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroB100.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroB100.tsp.gz", "compression": "gzip",
+      "wire_sha256": "a79057e65f367040bc67c9940117485bbc2f69ed1496a66c062402e7b69803cb", "raw_sha256": "283d8c912e3334deea76cc9fe95e915d09111979e7753d0affaf14d9aa21cdbe",
+      "reference": {"value": 22141, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "kroB200", "task": "tsp_public", "role": "main", "dimension": 200, "edge_count": 19900, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroB200.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroB200.tsp.gz", "compression": "gzip",
+      "wire_sha256": "de6cab0d45a7058fad2a1cec86c598c475c3adb0f922dc20e8d42923209c7a70", "raw_sha256": "baa5fbfda220b226623cad864e30feb180889d4fff430332667eae0e726799d2",
+      "reference": {"value": 29437, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "kroC100", "task": "tsp_public", "role": "main", "dimension": 100, "edge_count": 4950, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroC100.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/kroC100.tsp.gz", "compression": "gzip",
+      "wire_sha256": "62b1755fab2b60cf7049ffc93ae8d1b6270d18f71b79d3f677e41bd1dfa642c0", "raw_sha256": "aef750b8051e011df3b0fae21f4d71273cf129bcf7f2a9b697c2406bcaec68d2",
+      "reference": {"value": 20749, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "bier127", "task": "tsp_public", "role": "main", "dimension": 127, "edge_count": 8001, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/bier127.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/bier127.tsp.gz", "compression": "gzip",
+      "wire_sha256": "771440428f31cca8b9913f54e7230b13f4f55d0b5e1f05617968e7eb50c8b58a", "raw_sha256": "a4c944ca4b32fc9facd00ab664e47ebc37853f4349b971e5094cea4215ff71da",
+      "reference": {"value": 118282, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum; retrieved2026-09-29."
+    },
+    {
+      "id": "tsp225", "task": "tsp_public", "role": "main", "dimension": 225, "edge_count": 25200, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/tsp225.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/tsp225.tsp.gz", "compression": "gzip",
+      "wire_sha256": "67bb7df0c7dd991604214b11ca9e991c0f7776eee2d5862edacf7b6151b3f3d0", "raw_sha256": "3d356ab7c1a724cd1e05e0809cf2db11932c3bc8f54f6124e02c2b6c7f5fd901",
+      "reference": {"value": 3916, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Official TSPLIB optimum. Published tour reproduces3916 with binary-double sqrt+nint, not exact decimal; stale tour header3919 is not the objective reference."
+    },
+    {
+      "id": "eil51", "task": "tsp_public", "role": "calibration", "dimension": 51, "edge_count": 1275, "edge_weight_type": "EUC_2D",
+      "source_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/eil51.tsp.gz",
+      "download_url": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/eil51.tsp.gz", "compression": "gzip",
+      "wire_sha256": "7176f94c7ca15c242fa4e9d418c19f326c17695ea1d6b2ea2d3caf8c9d172bbe", "raw_sha256": "66c05ad077ffd64d5778e358bbd16be049f8c8ae880cbd24f034487331d1ccce",
+      "reference": {"value": 426, "status": "proven_optimum", "source": "https://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp/TSP-BEST.html"},
+      "reference_as_of": "2026-09-29", "reference_note": "Calibration only; official optimum tour independently verifies426."
+    },
+    {
+      "id": "sg3dl051000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl051000.mc", "compression": "none",
+      "wire_sha256": "ea7893b820cce9c96bd73ed5bb2a018103801a2b37f4789d6d00d2f0e9ab6557", "raw_sha256": "ea7893b820cce9c96bd73ed5bb2a018103801a2b37f4789d6d00d2f0e9ab6557",
+      "reference": {"value": 110, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl051000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl052000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl052000.mc", "compression": "none",
+      "wire_sha256": "97effb8bd49b34bb64106f6802e0e6af938b6419417cb69db968de4658255def", "raw_sha256": "97effb8bd49b34bb64106f6802e0e6af938b6419417cb69db968de4658255def",
+      "reference": {"value": 112, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl052000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl053000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl053000.mc", "compression": "none",
+      "wire_sha256": "37c50fc3b419544f589314dee5cce27e8853cc8354b6b0100104dd694b5bd783", "raw_sha256": "37c50fc3b419544f589314dee5cce27e8853cc8354b6b0100104dd694b5bd783",
+      "reference": {"value": 106, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl053000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl054000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl054000.mc", "compression": "none",
+      "wire_sha256": "3dfee03026397b88f1394f41004de808d215a8e36bc01b7a785d6168f514e3b6", "raw_sha256": "3dfee03026397b88f1394f41004de808d215a8e36bc01b7a785d6168f514e3b6",
+      "reference": {"value": 114, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl054000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl055000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl055000.mc", "compression": "none",
+      "wire_sha256": "a8b05dbb607219f573577210b12208fd51e4131ebd780f90f2633c895b9e972a", "raw_sha256": "a8b05dbb607219f573577210b12208fd51e4131ebd780f90f2633c895b9e972a",
+      "reference": {"value": 112, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl055000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl056000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl056000.mc", "compression": "none",
+      "wire_sha256": "7b82478b5169a968b0d258d67c5ffba5c33670d0a2c5a2e03c263b62491c04db", "raw_sha256": "7b82478b5169a968b0d258d67c5ffba5c33670d0a2c5a2e03c263b62491c04db",
+      "reference": {"value": 110, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl056000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl057000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl057000.mc", "compression": "none",
+      "wire_sha256": "0717e6b49e17117308c8c329984b512472d3abd5a3dcc4568702727f0ef6fa84", "raw_sha256": "0717e6b49e17117308c8c329984b512472d3abd5a3dcc4568702727f0ef6fa84",
+      "reference": {"value": 112, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl057000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl058000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl058000.mc", "compression": "none",
+      "wire_sha256": "c4fb2c681e24cd5e164a6e86c3b596f17bae150886afa44ab99859cf746c2037", "raw_sha256": "c4fb2c681e24cd5e164a6e86c3b596f17bae150886afa44ab99859cf746c2037",
+      "reference": {"value": 108, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl058000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl059000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl059000.mc", "compression": "none",
+      "wire_sha256": "af794c147d644a9c5fac77a37448cf581100a9e5b855ba33a4d250e54c5eb7dc", "raw_sha256": "af794c147d644a9c5fac77a37448cf581100a9e5b855ba33a4d250e54c5eb7dc",
+      "reference": {"value": 110, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl059000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    },
+    {
+      "id": "sg3dl0510000", "task": "maxcut_public", "role": "main", "dimension": 125, "edge_count": 375,
+      "source_url": "https://grafo.etsii.urjc.es/optsicom/maxcut/set2.zip",
+      "download_url": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/instances/sg3dl0510000.mc", "compression": "none",
+      "wire_sha256": "1c0fdca5efde5892158e024868029a96e6e8bf758caab624966f9289db7e8925", "raw_sha256": "1c0fdca5efde5892158e024868029a96e6e8bf758caab624966f9289db7e8925",
+      "reference": {"value": 112, "status": "best_known", "source": "https://raw.githubusercontent.com/mdenhoedt/MaxCut-Instances/9c9c1a84774ac14b7c161d5d5ea1f4f554a39a76/set2/bkvl/sg3dl0510000.bkvl"},
+      "reference_as_of": "2016-08-16", "reference_note": "Historical mirror-reported best-known; independently verified feasible witness; not proven optimal or asserted current."
+    }
+  ]
+}

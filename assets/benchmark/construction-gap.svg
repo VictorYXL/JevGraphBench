@@ -166,5 +166,5 @@
 <text x="994.8" y="687" text-anchor="middle" font-size="16">0.0000</text>
 <text x="994.8" y="703" text-anchor="middle" font-size="11">40/40 feasible</text>
 <text x="24" y="746" font-size="13">Units: edges / Manhattan distance / activated nodes / modularity. No combined task score.</text>
-<text x="24" y="770" font-size="13">JevGraphBench · canonical inspected bank · n = 8–12 · point estimates, not significance claims</text>
+<text x="24" y="770" font-size="13">GraphDecide · canonical inspected bank · n = 8–12 · point estimates, not significance claims</text>
 </g></svg>

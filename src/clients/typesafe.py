@@ -34,6 +34,8 @@ class TypeSafeClient(BaseDecisionClient):
     AsyncClient (and any supplied transport) is owned and closed by this adapter.
     timeout_seconds configures HTTPX connect/read/write/pool timeouts, not a total
     wall-clock deadline. Context-token capacity is deliberately left unknown.
+    require_probabilities=False selects native-action-only evaluation: probability
+    fields are withheld, not repaired; the caller must audit raw_output separately.
     """
 
     _CAPABILITIES = ClientCapabilities(supports_probabilities=True, max_options=255)
@@ -47,6 +49,7 @@ class TypeSafeClient(BaseDecisionClient):
         base_url: str = "https://api.typesafe.ai/v1",
         timeout_seconds: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        require_probabilities: bool = True,
     ) -> None:
         key = os.environ.get("TYPESAFE_API_KEY") if api_key is None else api_key
         if not isinstance(key, str) or not key.strip():
@@ -56,6 +59,9 @@ class TypeSafeClient(BaseDecisionClient):
             raise ValueError("API key must contain ASCII characters without whitespace")
         if not isinstance(model, str) or not model.strip():
             raise ValueError("model must be a nonempty string")
+        if type(require_probabilities) is not bool:
+            raise ValueError("require_probabilities must be bool")
+        self.require_probabilities = require_probabilities
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
@@ -85,7 +91,9 @@ class TypeSafeClient(BaseDecisionClient):
 
     @property
     def capabilities(self) -> ClientCapabilities:
-        return self._CAPABILITIES
+        if self.require_probabilities:
+            return self._CAPABILITIES
+        return ClientCapabilities(max_options=255)
 
     async def predict(self, request: DecisionRequest) -> DecisionResponse:
         if self._closed:
@@ -120,7 +128,7 @@ class TypeSafeClient(BaseDecisionClient):
             raise InvalidResponseError(
                 "TypeSafe returned invalid JSON", raw_output=response.text
             ) from None
-        return self._parse_response(request, body)
+        return self._parse_response(request, body, require_probabilities=self.require_probabilities)
 
     @staticmethod
     def _probability(value: Any, name: str) -> float:
@@ -133,7 +141,9 @@ class TypeSafeClient(BaseDecisionClient):
         return float(value)
 
     @classmethod
-    def _parse_response(cls, request: DecisionRequest, body: Any) -> DecisionResponse:
+    def _parse_response(
+        cls, request: DecisionRequest, body: Any, *, require_probabilities: bool = True
+    ) -> DecisionResponse:
         diagnostic_code = "invalid_response"
         try:
             if not isinstance(body, dict):
@@ -154,23 +164,25 @@ class TypeSafeClient(BaseDecisionClient):
             selected = answer.get("choice")
             if not isinstance(selected, str) or selected not in ids:
                 raise ValueError("choice is not a supplied option")
-            diagnostic_code = "invalid_probabilities"
-            raw_probs = answer.get("probabilities")
-            if not isinstance(raw_probs, dict) or set(raw_probs) != set(ids):
-                raise ValueError("probabilities must cover exactly the supplied options")
-            probabilities = {
-                option_id: cls._probability(raw_probs[option_id], "option probability")
-                for option_id in ids
-            }
-            # Allow floating-point rounding only; never silently renormalize.
-            diagnostic_code = "invalid_probability_sum"
-            if not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0, abs_tol=1e-6):
-                raise ValueError("probabilities must sum to 1")
-            diagnostic_code = "choice_probability_mismatch"
-            if probabilities[selected] + 1e-6 < max(probabilities.values()):
-                raise ValueError("choice does not have the highest probability")
-            diagnostic_code = "invalid_confidence"
-            confidence = cls._probability(answer.get("confidence"), "confidence")
+            probabilities, confidence = None, None
+            if require_probabilities:
+                diagnostic_code = "invalid_probabilities"
+                raw_probs = answer.get("probabilities")
+                if not isinstance(raw_probs, dict) or set(raw_probs) != set(ids):
+                    raise ValueError("probabilities must cover exactly the supplied options")
+                probabilities = {
+                    option_id: cls._probability(raw_probs[option_id], "option probability")
+                    for option_id in ids
+                }
+                # Allow floating-point rounding only; never silently renormalize.
+                diagnostic_code = "invalid_probability_sum"
+                if not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0, abs_tol=1e-6):
+                    raise ValueError("probabilities must sum to 1")
+                diagnostic_code = "choice_probability_mismatch"
+                if probabilities[selected] + 1e-6 < max(probabilities.values()):
+                    raise ValueError("choice does not have the highest probability")
+                diagnostic_code = "invalid_confidence"
+                confidence = cls._probability(answer.get("confidence"), "confidence")
             diagnostic_code = "invalid_usage"
             raw_usage = body.get("usage")
             if not isinstance(raw_usage, dict):
@@ -186,7 +198,7 @@ class TypeSafeClient(BaseDecisionClient):
                 selected_option_id=selected,
                 resolved_model=model,
                 probabilities=probabilities,
-                probability_kind="native",
+                probability_kind="native" if probabilities is not None else None,
                 confidence=confidence,
                 usage=TokenUsage(**counts),
                 raw_output=body,

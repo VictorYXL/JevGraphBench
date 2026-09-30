@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="690" viewBox="0 0 900 690" role="img" aria-labelledby="title desc">
+<title id="title">GraphDecide public-instance solution quality</title>
+<desc id="desc">Mean directional percentage gaps and feasible/scheduled coverage. Each task has its own color scale. MaxCut uses historical source-reported best-known references, not proven optima. Full values are in the README and CSV.</desc>
+<rect width="900" height="690" rx="16" fill="#f8fafc"/>
+<g font-family="Arial,Helvetica,sans-serif" fill="#14213d">
+<text x="28" y="38" font-size="25" font-weight="700">Public-instance optimization</text>
+<text x="28" y="67" font-size="15">17 public graphs; three relabeling/start conditions per graph</text>
+<text x="510" y="111" text-anchor="middle" font-size="19" font-weight="700">TSPLIB</text>
+<text x="750" y="111" text-anchor="middle" font-size="19" font-weight="700">Signed MaxCut</text>
+<text x="510" y="136" text-anchor="middle" font-size="14">7 instances, 100-225 cities</text>
+<text x="750" y="136" text-anchor="middle" font-size="14">10 instances, 125 vertices</text>
+<text x="28" y="185" font-size="17">Jev-1.13.0</text>
+<rect x="405" y="156" width="210" height="44" rx="7" fill="#e1efe7"/>
+<text x="421" y="185" font-size="22" font-weight="700">66.01%</text>
+<text x="599" y="184" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="156" width="210" height="44" rx="7" fill="#fad1ca"/>
+<text x="661" y="185" font-size="22" font-weight="700">104.26%</text>
+<text x="839" y="184" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="236" font-size="17">Qwen3.5-0.8B</text>
+<rect x="405" y="207" width="210" height="44" rx="7" fill="#f9d2cb"/>
+<text x="421" y="236" font-size="22" font-weight="700">750.53%</text>
+<text x="599" y="235" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="207" width="210" height="44" rx="7" fill="#f9d2cb"/>
+<text x="661" y="236" font-size="22" font-weight="700">100.64%</text>
+<text x="839" y="235" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="287" font-size="17">Qwen3.5-2B</text>
+<rect x="405" y="258" width="210" height="44" rx="7" fill="#f8d3cc"/>
+<text x="421" y="287" font-size="22" font-weight="700">715.96%</text>
+<text x="599" y="286" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="258" width="210" height="44" rx="7" fill="#f9d3cc"/>
+<text x="661" y="287" font-size="22" font-weight="700">100.23%</text>
+<text x="839" y="286" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="338" font-size="17">Qwen3.5-4B</text>
+<rect x="405" y="309" width="210" height="44" rx="7" fill="#eae5dd"/>
+<text x="421" y="338" font-size="22" font-weight="700">307.11%</text>
+<text x="599" y="337" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="309" width="210" height="44" rx="7" fill="#f9d3cc"/>
+<text x="661" y="338" font-size="22" font-weight="700">100.05%</text>
+<text x="839" y="337" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="389" font-size="17">Qwen3.5-9B</text>
+<rect x="405" y="360" width="210" height="44" rx="7" fill="#ece2da"/>
+<text x="421" y="389" font-size="22" font-weight="700">381.82%</text>
+<text x="599" y="388" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="360" width="210" height="44" rx="7" fill="#f8d4cd"/>
+<text x="661" y="389" font-size="22" font-weight="700">97.31%</text>
+<text x="839" y="388" text-anchor="end" font-size="14">30/30</text>
+<line x1="28" y1="406" x2="870" y2="406" stroke="#94a3b8"/>
+<text x="28" y="440" font-size="17">Uniform random</text>
+<rect x="405" y="411" width="210" height="44" rx="7" fill="#fad1ca"/>
+<text x="421" y="440" font-size="22" font-weight="700">772.66%</text>
+<text x="599" y="439" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="411" width="210" height="44" rx="7" fill="#f9d3cc"/>
+<text x="661" y="440" font-size="22" font-weight="700">100.28%</text>
+<text x="839" y="439" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="491" font-size="17">Nearest neighbor / greedy</text>
+<rect x="405" y="462" width="210" height="44" rx="7" fill="#e0f1e8"/>
+<text x="421" y="491" font-size="22" font-weight="700">27.65%</text>
+<text x="599" y="490" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="462" width="210" height="44" rx="7" fill="#e1efe6"/>
+<text x="661" y="491" font-size="22" font-weight="700">29.20%</text>
+<text x="839" y="490" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="542" font-size="17">2-opt / single-flip search</text>
+<rect x="405" y="513" width="210" height="44" rx="7" fill="#dff2e9"/>
+<text x="421" y="542" font-size="22" font-weight="700">5.93%</text>
+<text x="599" y="541" text-anchor="end" font-size="14">21/21</text>
+<rect x="645" y="513" width="210" height="44" rx="7" fill="#dff2e9"/>
+<text x="661" y="542" font-size="22" font-weight="700">22.02%</text>
+<text x="839" y="541" text-anchor="end" font-size="14">30/30</text>
+<text x="28" y="599" font-size="15">Lower gap is better; means use feasible episodes. Coverage uses every scheduled episode.</text>
+<text x="28" y="625" font-size="15">TSPLIB: published proven optima. MaxCut: historical source-reported best-known values.</text>
+<text x="28" y="651" font-size="15">Colors are task-specific. Classical search references may revise choices; models do not.</text>
+</g></svg>

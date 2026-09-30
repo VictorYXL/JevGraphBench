@@ -190,6 +190,39 @@ class RegistryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TypeSafeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_explicit_native_action_mode_does_not_repair_probabilities(self) -> None:
+        body = make_body()
+        body["answers"]["decision"].update(
+            choice="yes", probabilities={"yes": 0.20, "no": 0.79})
+        original = copy.deepcopy(body)
+        with self.assertRaises(InvalidResponseError):
+            TypeSafeClient._parse_response(make_request(), body)
+        transport = httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+        async with TypeSafeClient(
+            api_key="test-key", transport=transport, require_probabilities=False
+        ) as client:
+            result = await client.predict(make_request())
+            self.assertEqual(result.selected_option_id, "yes")
+            self.assertIsNone(result.probabilities)
+            self.assertIsNone(result.probability_kind)
+            self.assertIsNone(result.confidence)
+            self.assertFalse(client.capabilities.supports_probabilities)
+            self.assertEqual(result.raw_output, original)
+        self.assertEqual(body, original)
+
+    def test_native_action_mode_still_rejects_invalid_actions_and_usage(self) -> None:
+        for field, value in (("choice", "absent"), ("type", "score")):
+            body = make_body()
+            body["answers"]["decision"][field] = value
+            with self.subTest(field=field), self.assertRaises(InvalidResponseError):
+                TypeSafeClient._parse_response(make_request(), body, require_probabilities=False)
+        body = make_body()
+        body["usage"] = {"input_tokens": -1}
+        with self.assertRaises(InvalidResponseError):
+            TypeSafeClient._parse_response(make_request(), body, require_probabilities=False)
+        with self.assertRaises(ValueError):
+            TypeSafeClient(api_key="test-key", require_probabilities="false")
+
     async def test_wire_contract_and_normalization(self) -> None:
         requests = []
 

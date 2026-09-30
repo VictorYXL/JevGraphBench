@@ -1,31 +1,187 @@
-# JevGraphBench
+# GraphDecide
 
 ### Benchmarking Decision Models on Graphs
 
-**Do correct local decisions compose into good graph solutions?**
-JevGraphBench evaluates Jev, open trained decision models, bounded Qwen
-configurations and separate GPT reasoning references using exactly verifiable
-graph tasks.
+**Fast decisions are useful only if they produce good graph solutions.**
+GraphDecide evaluates decision-oriented models through public-instance
+optimization and controlled graph-reasoning diagnostics. The repository URL
+and Python package retain the existing JevGraphBench name.
 
-| Evaluated configurations | Graph tasks | Shared instances | Graph sizes |
-|:---:|:---:|:---:|:---:|
-| **10 direct-decision + 2 reasoning references** | **6 single-step + 4 sequential** | **960 per configuration** | **8–12 vertices** |
+**[Paper: GraphDecide (v25, PDF)](assets/paper/GraphDecide_no_code_v25.pdf)**
+— 8 main-text pages, with public-instance results and the action-abstraction
+diagnostic in Appendix H (pages 25–29).
 
-**Results snapshot: September 27, 2026** · 11,520 scheduled episode evaluations ·
-720 model × task × size metric cells
+| Evaluation panel | Tasks and scale | Model configurations | Scheduled evaluations |
+| --- | --- | --- | --- |
+| **Public optimization** | 7 TSPLIB instances, 100–225 cities; 10 signed MaxCut graphs, 125 vertices | Jev + four Qwen3.5 models | **255 trajectories**: 17 graphs × 3 conditions × 5 models |
+| **Action abstraction** | Same 7 TSPLIB instances; frozen four-rule pool | Jev + Qwen3.5-4B / 9B | **126 new trajectories**, plus 63 reused direct-action trajectories |
+| **Controlled diagnostics** | 6 graph queries + 4 constructions, 8–12 vertices | 10 direct-decision + 2 reasoning references | **11,520 episodes** on 960 shared cases per configuration |
 
+**Public results: September 29, 2026.** The controlled diagnostic snapshot
+remains September 27, 2026. Repeated conditions and queries are not independent
+graphs, and the two panels are not a controlled size-scaling experiment.
+
+[Public optimization](#public-instance-optimization) ·
+[Action abstraction](#action-abstraction-results) ·
 [Evaluation pipeline](#what-the-benchmark-measures) · [Key findings](#key-findings) · [Exact decisions](#exact-decisions) ·
 [Sequential construction](#sequential-construction) ·
 [Trajectory diagnosis](#when-does-optimality-become-unreachable) ·
 [Reasoning references](#reasoning-references) ·
 [Evaluation protocol](#evaluation-protocol) ·
-[Download results (CSV)](assets/benchmark/benchmark.csv) ·
+[Public results (CSV)](assets/benchmark/public-summary.csv) ·
+[Diagnostic results (CSV)](assets/benchmark/benchmark.csv) ·
 [Run the benchmark](#run-the-benchmark)
 
 > **A taskwise comparison, not a universal leaderboard.** Higher accuracy and
-> lower objective gaps are better, but gaps have different units across tasks.
-> We do not combine them into one overall score. GPT references use different
-> reasoning budgets and are not compute-matched to the direct-decision models.
+> lower objective gaps are better. Public percentage gaps and diagnostic
+> additive gaps are different metrics; neither is combined into one overall
+> score. GPT results shown below belong to the small-graph diagnostic panel,
+> use different reasoning budgets, and are not compute-matched baselines.
+
+## Public-instance optimization
+
+Every method receives the complete graph representation and follows its own
+decisions. TSP exposes all unvisited cities, not a heuristic shortlist; MaxCut
+assigns every vertex to one of two sides. All five models complete **51/51**
+conditions: **21 TSP tours and 30 signed cuts**.
+
+- **TSPLIB:** `kroA100`, `kroA150`, `kroB100`, `kroB200`, `kroC100`,
+  `bier127`, and `tsp225`, using their published proven optima.
+- **Signed MaxCut:** ten original OPTSICOM Set2 graphs, each with 125 vertices
+  and 375 edges weighted ±1. References are **historical source-reported
+  best-known values from a pinned 2016 snapshot**, not claimed current global
+  best values or proven optima.
+- **Conditions:** three deterministic relabeling/start conditions per graph,
+  shared across models. Calibration instance `eil51` is excluded.
+
+![Public-instance percentage gaps and feasible/scheduled coverage for Jev, four Qwen models and classical references. Lower is better; each task has its own color scale.](assets/benchmark/public-construction.svg)
+
+**The TSP advantage does not extend to signed MaxCut.** Jev's mean TSP gap is
+**66.01%**, versus **307.11%** for Qwen3.5-4B and **381.82%** for Qwen3.5-9B,
+but nearest neighbor alone reaches **27.65%**, and adding 2-opt reaches
+**5.93%**. On signed MaxCut, neural outcomes remain near the uniform-random
+reference rather than the substantially better classical heuristics.
+
+<details>
+<summary><strong>View public values, coverage and observed episode times</strong></summary>
+
+Values are mean per-episode directional percentage gaps on feasible
+completions. All cells have full coverage. Qwen uses greedy,
+grammar-constrained answer-only generation with thinking disabled and a
+16-token ceiling.
+
+| Method | Interface | TSP gap (%) | Completed | MaxCut gap (%) | Completed |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Jev-1.13.0 | Native action | 66.01 | 21/21 | 104.26 | 30/30 |
+| Qwen3.5-0.8B | Grammar | 750.53 | 21/21 | 100.64 | 30/30 |
+| Qwen3.5-2B | Grammar | 715.96 | 21/21 | 100.23 | 30/30 |
+| Qwen3.5-4B | Grammar | 307.11 | 21/21 | 100.05 | 30/30 |
+| Qwen3.5-9B | Grammar | 381.82 | 21/21 | 97.31 | 30/30 |
+| Uniform random | Classical | 772.66 | 21/21 | 100.28 | 30/30 |
+| Nearest neighbor / greedy | Classical | 27.65 | 21/21 | 29.20 | 30/30 |
+| 2-opt / single-flip search | Classical | 5.93 | 21/21 | 22.02 | 30/30 |
+
+For TSP, gap = `100 × (solution − reference) / |reference|`; for MaxCut,
+gap = `100 × (reference − solution) / |reference|`.
+Signed cut objectives can be negative, so gaps above 100% are valid.
+Improvements over a historical reference would have negative gaps; neither
+sign is clipped. Classical local search can revise choices and is a quality
+reference, not an equal-budget irreversible model policy.
+
+| Model | Median TSP episode (s) | Median MaxCut episode (s) |
+| --- | ---: | ---: |
+| Jev-1.13.0 | 20.95 | 21.25 |
+| Qwen3.5-0.8B | 48.76 | 33.52 |
+| Qwen3.5-2B | 55.59 | 35.43 |
+| Qwen3.5-4B | 103.49 | 49.45 |
+| Qwen3.5-9B | 154.56 | 71.29 |
+
+These are observed **audited episode wall times**, including request
+preparation, model calls, logging, scoring and trajectory replay checks, not
+pure inference or solver time. The episode CSV separately records accumulated
+call duration, including response validation. Runs allow up to four
+concurrent episodes per model; the three-condition correction uses three.
+Cloud/network paths and local RTX A6000 serving differ, so these observations
+do not establish a matched-hardware or architecture-level speedup.
+
+Jev's legal native action is evaluated separately from probability
+conformance. Among **6,684** evaluated Jev calls, **1,186** probability vectors
+fail the unit-sum check and **one** fails choice/argmax agreement. These are
+retained audit findings, not normalized probabilities or substituted actions.
+
+</details>
+
+[Summary CSV](assets/benchmark/public-summary.csv) ·
+[All 255 episode metrics](assets/benchmark/public-episodes.csv) ·
+[Verification and source identities](assets/benchmark/public-results.json) ·
+[Pinned dataset catalog](assets/benchmark/public-catalog.json)
+
+## Action-abstraction results
+
+**Better proposals help, but model selection still trails a fixed rule.**
+This supplementary panel uses the same seven TSPLIB graphs and three
+relabeling/start conditions. Four hand-designed append-only rules were frozen
+before new inference; neither the rules nor the model roster was changed
+after seeing B/C outcomes.
+
+- **A — all cities:** reuse the verified direct-action trajectories above.
+- **B — anonymous proposals:** choose among distinct cities proposed by the
+  rules, without rule names.
+- **C — named proposals:** expose rule names, formulas and their city mappings.
+  At the same history, B/C have identical candidate cities, numeric features
+  and option order. Their subsequent trajectories can differ.
+
+Values are **graph-macro mean tour gaps (%)**, lower is better: average
+completed conditions within each graph, then the seven graphs equally.
+They are conditional on completed tours; coverage is reported separately.
+
+| Model | A: all cities | B: anonymous | C: named | Completed A / B / C |
+| --- | ---: | ---: | ---: | --- |
+| Jev | 66.01 | 31.12 | 27.80 | 21/21 · **20/21** · 21/21 |
+| Qwen3.5-4B | 307.11 | 43.70 | 36.36 | 21/21 · 21/21 · 21/21 |
+| Qwen3.5-9B | 381.82 | 39.09 | 26.76 | 21/21 · 21/21 · 21/21 |
+
+For the four rules, `e` is the current edge length, `h` the distance to the
+nearest other unvisited city, and `r` the distance back to the start. Each
+rule minimizes its score over all unvisited cities. These are fixed
+hand-designed formulas, not trained policies.
+
+| Reference | Score / selection | Gap (%) |
+| --- | --- | ---: |
+| Nearest neighbor | `e` | 27.65 |
+| One-step lookahead | `e + h` | 56.86 |
+| Return reserve | `2*e - r` | **16.01** |
+| Isolation priority | `e - h` | 32.16 |
+| Uniform random proposal | Five fixed seeds per condition | 43.18 |
+| Shortest-edge proposal selector | Identical to nearest neighbor | 27.65 |
+| Nearest neighbor + 2-opt | Classical local-search reference | **5.93** |
+
+**What this reveals.** Random proposal selection already beats every A model
+mean, so the large A-to-B/C gains cannot be credited entirely to model
+decisions. Named C improves over anonymous B by **3.22, 7.34 and 12.32
+percentage points** for Jev, Qwen3.5-4B and Qwen3.5-9B, respectively, on
+matched completed conditions; the graph-level direction improves on **5/7,
+7/7 and 6/7** graphs. Nevertheless, every model arm remains worse than the
+fixed return-reserve rule and nearest neighbor + 2-opt.
+
+**Coverage and limits.** Of 126 new trajectories, 125 complete. Jev-B has one
+HTTP 520 failure on `kroB200`, retained without retry or an imputed score.
+Its paired C-minus-B change uses 20 matched conditions, so it is not the
+subtraction of the two marginal means above. The three conditions per graph
+are correlated, not independent graph samples. C also changes prompt content;
+this does not isolate planning ability or establish solver superiority.
+
+The run records **9,451 model calls**, including the failed call, and
+**8,138 forced singleton-proposal steps**. Four successful Jev calls fail the
+probability-sum audit; native actions remain unchanged. Candidate computation,
+model calls, solve wall time and replay are recorded separately. A's old
+wall time includes replay, so a clean solve-only speedup over A is not claimed.
+
+[Model summary CSV](assets/benchmark/abstraction-summary.csv) ·
+[All 189 model records](assets/benchmark/abstraction-episodes.csv) ·
+[Per-graph paired contrasts](assets/benchmark/abstraction-paired-deltas.csv) ·
+[All 252 baseline records](assets/benchmark/abstraction-baselines.csv) ·
+[Provenance and interpretation](assets/benchmark/abstraction-results.json)
 
 ## What the benchmark measures
 
@@ -33,19 +189,26 @@ A bounded output can be valid but wrong. A complete sequence of legal actions
 can also produce a poor solution. Final accuracy or a single completion score
 cannot distinguish these outcomes.
 
+The schematic below describes the controlled small-graph diagnostic panel;
+public-instance reference values do not provide exact continuation optima.
+
 ![Evaluation pipeline: public graph state, bounded choice, actual-history transitions and privileged offline verification. No oracle values enter model requests.](assets/benchmark/evaluation-pipeline.svg)
 
-JevGraphBench addresses this measurement problem at three levels:
+GraphDecide separates three questions:
 
-1. **Independent truth:** graph queries have mathematically checked answers,
-   rather than labels defined by a model's own predictions.
-2. **End-to-end quality:** sequential constructions have exact optimal objectives;
+1. **Correct answers:** controlled graph queries have independently checked truth.
+2. **End-to-end quality:** public constructions use published references;
    gap and completion coverage are reported separately.
-3. **Where quality is lost:** exact continuation analysis measures the best
+3. **Diagnostic explanation:** on the small synthetic graphs only, exact
+   continuation analysis measures the best
    solution still reachable after each recorded action. A later locally optimal
    decision cannot undo an earlier irreversible loss.
 
 ## Key findings
+
+The following findings concern the **controlled 8–12-vertex diagnostic
+panel**, not the public-instance results above. Its exact continuation analysis
+does not extend to the public instances merely because a final reference is known.
 
 | Observation | Evidence |
 | --- | --- |
@@ -90,6 +253,10 @@ chance reference does not apply to multiclass degree.
 </details>
 
 ## Sequential construction
+
+This section reports **small-graph diagnostic constructions**. In particular,
+its Manhattan TSP instances and additive gaps are different from the public
+TSPLIB panel and must not be merged with its percentage gaps.
 
 **Mean additive objective gap, lower is better.** Each model follows its own
 previous choices. Deterministic code applies legal actions without supplying
@@ -204,14 +371,20 @@ completed solutions, **not** success on every scheduled episode.
 
 ## Evaluation protocol
 
-- **Shared bank:** 960 instances per configuration: 800 exact queries and
+- **Public panel:** complete original instances, all legal actions, three
+  paired relabeling/start conditions, and external reference values. No
+  cropped graphs, candidate filtering, answer repair or reference disclosure.
+  Synthetic/public panels differ in graph families, distance types, signed
+  weights, input features and model budgets; they are complementary tests,
+  not a causal size-scaling comparison.
+- **Diagnostic bank:** 960 instances per configuration: 800 exact queries and
   160 sequential constructions. The 11,520 evaluations reuse these instances;
   they are not 11,520 independent graphs.
-- **Exact verification:** small graphs permit deterministic answers and exact
+- **Diagnostic verification:** small graphs permit deterministic answers and exact
   optimal objectives. For maximization, gap = optimum − solution; for
   minimization, gap = solution − optimum.
-- **Interfaces:** Grammar means no-thinking, greedy choice-constrained
-  generation with a 64-token ceiling. Candidate scoring is a separate
+- **Diagnostic interfaces:** Grammar means no-thinking, greedy choice-constrained
+  generation with a 64-token ceiling (16 in the public panel). Candidate scoring is a separate
   Qwen3.5-4B readout, not a different model or a trained Jev-like selector.
   Native denotes each model's own selection interface, not identical internals.
   Decider-2B uses the v11 checkpoint.
@@ -230,22 +403,31 @@ completed solutions, **not** success on every scheduled episode.
 [JevAdvBench](https://arxiv.org/abs/2609.31142) studies how input interventions
 change typed decisions relative to a clean answer and an identical-request
 noise baseline. Our complementary question is whether decisions are
-mathematically correct and compose into good solutions, using exact graph
-oracles and actual-history continuation values.
+mathematically correct and compose into good solutions, using public
+optimization references and controlled graph diagnostics.
 Decision stability, correctness and optimization quality are different
 properties; neither benchmark substitutes for the other. Our presentation
 controls are not a comprehensive adversarial evaluation.
 
 ### Data behind the figures
 
-The [aggregate CSV](assets/benchmark/benchmark.csv) contains all **720**
+The [public summary](assets/benchmark/public-summary.csv) contains **16**
+method/task summaries; the [episode CSV](assets/benchmark/public-episodes.csv)
+contains all **255** model conditions with reference values, gaps, call counts
+and times. All 255 model objectives and 153 classical-reference objectives
+were independently checked. Every retained request was replayed; all `tsp225`
+conditions were rerun using the documented distance formula after a
+`hypot`/`sqrt` boundary discrepancy was identified. Original affected runs
+are excluded, not silently rescored.
+
+The unchanged [diagnostic aggregate CSV](assets/benchmark/benchmark.csv) contains all **720**
 model/task/size rows, including per-size results, feasible and scheduled counts,
 failures, mean gaps and optimum-hit rates. `nodeCount=all` denotes the aggregate;
 raw experimental identifiers are preserved even where display names are expanded.
-No new model calls were made to produce this page.
+Rendering these figures does not make model calls.
 
 <details>
-<summary>Snapshot identity and data integrity</summary>
+<summary>Diagnostic snapshot identity and data integrity</summary>
 
 - Evidence date: **2026-09-27**.
 - Immutable aggregate version: `canonical-20260927-v14`.
@@ -281,18 +463,18 @@ is still `jevgraphbench`.
 
 | Path | Purpose |
 | --- | --- |
-| [src/benchmark/](src/benchmark/) | Task generation, exact scoring, offline trajectory analysis and experiment runner |
+| [src/benchmark/](src/benchmark/) | Public-data preparation, task generation/scoring, small-graph trajectory analysis and experiment runners |
 | [src/clients/](src/clients/) | Jev, vLLM and optional GitHub Copilot clients |
 | [src/datasets/](src/datasets/) | Real-network download, parsing and verification |
 | [configs/](configs/) | YAML configuration templates |
 | [data/real/](data/real/) | Dataset metadata; downloaded archives are ignored |
-| [scripts/](scripts/) | Three required runtime/audit utilities, described below |
+| [scripts/](scripts/) | Four runtime/audit utilities, described below |
 | [tests/](tests/) | Core regression tests only |
 | `output/`, `results/` | Ignored local artifacts; never required merely to import the core |
 
 Paper sources, PDFs, the website, historical experiments, publication scripts
 and their tests remain in ignored local `output/`. Only the compact result
-figures, aggregate CSV and replayable example used by this README are included
+figures, result CSVs, pinned public-source catalog and replayable example used by this README are included
 under [assets/benchmark/](assets/benchmark/).
 No weights, credentials or raw provider ledgers are distributed here.
 
@@ -379,6 +561,12 @@ The bundled JSON example can be replayed independently of historical runners.
 The retained scripts are:
 
 - [extended_graph_suite.py](scripts/extended_graph_suite.py): plan, run, report and offline analyze.
+- [public_graph_suite.py](scripts/public_graph_suite.py): frozen full-input public
+  optimization plans, live evaluation and independently replayed reports.
+- [tsp_abstraction_suite.py](scripts/tsp_abstraction_suite.py): fixed-protocol
+  supplementary candidate-city and rule-group comparisons.
+- [tsp_abstraction_report.py](scripts/tsp_abstraction_report.py): offline
+  supplementary tables, including failures, paired coverage and timing.
 - [paired_graph_ablation.py](scripts/paired_graph_ablation.py): shared model
   configuration, preflight, locking and integrity utilities required by the suite.
 - [audit_task_shortcuts.py](scripts/audit_task_shortcuts.py): offline label and
@@ -387,6 +575,96 @@ The retained scripts are:
 Historical twelve-configuration orchestration and publication tools are
 archived, not part of this minimal CLI. The core suite does not claim to
 reproduce every historical model lane from a single command.
+
+### Public optimization instances
+
+The public-instance runner is separate from the small-graph diagnostic suite.
+It does not compute exact optima or prefix-conditioned continuation values.
+TSP inputs retain their TSPLIB `EUC_2D` coordinates and integer distance
+rounding (`int(sqrt(dx*dx + dy*dy) + 0.5)` in binary floating point, following
+the documented formula); only instances with fewer than 255 cities are
+admitted. Exact-decimal reinterpretation or substituting `hypot` can change
+half-integer edges and must not be assumed equivalent to published references.
+The model
+receives the complete coordinate set, its own tour prefix, exact distances
+from the current city to **all** unvisited cities, and every legal next-city
+action. No candidate shortlist or heuristic selector is used. The last city
+and return edge are forced, so an episode uses `n - 2` model decisions.
+Public MaxCut inputs contain the complete signed weighted edge list and use
+`n - 1` partition decisions, fixing vertex 0 in side A.
+
+Input records must include a source-backed reference value tagged as either
+`proven_optimum` or `best_known`. Reference values and source identities are
+never included in model-visible states. Percentage gaps are directional:
+`100 * (solution - reference) / abs(reference)` for minimization and the
+reverse numerator for maximization. A negative gap to a best-known value is
+not clamped; an improvement over a supposedly proven optimum raises an error.
+
+```bash
+python scripts/public_graph_suite.py prepare --root output/public-data
+python scripts/public_graph_suite.py plan \
+  --root output/public-plan --inputs output/public-data/instances.json \
+  --models jev qwen08 qwen2 qwen4 qwen9 --repeats 3 --concurrency 4
+python scripts/public_graph_suite.py report --root output/public-plan
+# The next command makes live model calls:
+python scripts/public_graph_suite.py run --root output/public-plan
+```
+
+`prepare` is the explicit download step. It verifies pinned archive and raw
+file checksums, parses complete original graphs, and writes source provenance.
+It never reads credentials or downloads on import. The default catalog
+contains the 17 main instances; `--include-calibration` additionally writes
+`eil51` to a separate calibration file, never into the main set.
+`--dataset-ids` selects a named subset without cropping any graph.
+Raw datasets are downloaded locally rather than redistributed in this repository.
+
+Planning freezes the source, input records, model settings, relabeling/start
+conditions and classical baselines. Repeated conditions are not independent
+graphs. Qwen lanes use grammar-constrained answer-only decoding with thinking
+disabled; GPT lanes, when explicitly selected, remain separately budgeted
+reasoning references. In this public-instance protocol, Jev's legal native
+action is scored independently of probability conformance. Each successful
+action has a separate probability audit, retaining the original numeric vector
+and sum when validly represented. Non-unit sums are reported, not normalized;
+probability argmax never replaces the provider's chosen action. This explicit
+policy does not change the strict default adapter or historical experiments.
+Runs never overwrite existing lanes, retry failed calls
+or repair outputs. Reports preserve all scheduled episodes and pair
+conditional quality with coverage. Episode wall time and accumulated model
+call time are recorded separately; concurrent serving and different hardware
+prevent treating these observations as intrinsic architecture speedups.
+
+### Supplementary TSP action abstraction
+
+This separate experiment compares the original all-city interface (A) with
+anonymous heuristic-proposed cities (B) and named rule-equivalence groups (C).
+It does not replace the primary full-input results above. The
+[task contract](src/benchmark/tsp_abstraction.py) fixes four append-only scores:
+`e`, `e + h`, `2*e - r` and `e - h`, where `e` is the current edge length,
+`h` the nearest-other-unvisited distance, and `r` the distance back to the
+start. Each score proposes its minimum-scoring city, with city-ID tie breaks.
+Same-city proposals are deduplicated; singleton candidate sets are forced
+without a model call. At the same history, B and C share the full graph,
+candidate cities, numeric features and shuffled option order; C additionally
+exposes rule semantics and mappings.
+
+The experiment-specific planner requires a locally verified A panel and its
+original sealed source runs; those historical artifacts are not bundled with
+the core package. Prior-art content hashes are historical provenance, not
+runtime dependencies on private local files.
+`plan --root NEW_DIRECTORY --verified VERIFIED_A_DIRECTORY` is offline and
+freezes the protocol, inputs, baselines and source. `run --root DIRECTORY`
+makes live calls and then analyzes terminal records. Use the matching frozen
+source for an old plan; never edit its hashes to accept changed code.
+The reporting script accepts `--root DIRECTORY` after analysis.
+
+Report all fixed rules and random-candidate baselines, not just improvements
+over A. Quality is conditional on completed tours and must accompany scheduled
+coverage. Paired B/C deltas use jointly completed conditions, averaged within
+each original graph. Forced steps change call counts, and historical A wall
+time includes replay: it is not directly comparable to B/C solve-only time.
+Rule labels also change prompt content, so this is not an isolated test of
+planning ability.
 
 ### Scoring and failures
 
