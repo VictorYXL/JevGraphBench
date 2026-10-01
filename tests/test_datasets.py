@@ -50,6 +50,14 @@ class GraphReaderTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 get_source(name)
 
+    def test_default_loader_root_is_flattened_data_directory(self) -> None:
+        expected = Path(__file__).resolve().parents[1] / "data"
+        self.assertEqual(sources.DEFAULT_DATA_DIR, expected)
+        with patch("src.datasets.real_graphs._load_source") as loader:
+            load_graph("facebook")
+        source = get_source("facebook")
+        loader.assert_called_once_with(source, expected / "raw" / source.filename)
+
     def test_undirected_normalization_counts_and_ids(self) -> None:
         # Source comment is not a reliable direction declaration (as in ca-GrQc).
         source, path = self.fixture(gzip.compress(b"# Directed graph\n9 2\n2 9\n9 2\n50 50\n\n"))

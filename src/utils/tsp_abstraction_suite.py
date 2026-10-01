@@ -20,9 +20,9 @@ import sys
 import time
 from types import SimpleNamespace
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-from scripts import public_graph_suite as public
+from src.utils import public_graph_suite as public
 from src.benchmark import public_tasks as tasks
 from src.benchmark import tsp_abstraction as abstraction
 from src.benchmark.config import ModelConfig
@@ -40,9 +40,7 @@ EPISODE_SECONDS = 900
 
 def code_hashes():
     hashes = audit.code_hashes()
-    for name in ("scripts/public_graph_suite.py", "scripts/tsp_abstraction_suite.py",
-                 "tests/test_tsp_abstraction.py"):
-        hashes[name] = digest(REPO / name)
+    hashes["tests/test_tsp_abstraction.py"] = digest(REPO / "tests/test_tsp_abstraction.py")
     return dict(sorted(hashes.items()))
 
 

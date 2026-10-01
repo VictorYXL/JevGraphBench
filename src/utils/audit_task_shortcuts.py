@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 import sys
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts.paired_graph_ablation import digest, read_rows, write_json
+from src.utils.paired_graph_ablation import digest, read_rows, write_json
 
 
 def audit(instances):

@@ -13,7 +13,7 @@ The following counts were measured after loading and normalizing the data using 
 | `power` | Power-grid infrastructure | 4,941 | 6,594 | 1 | 0 |
 | `human-ppi` | Human protein interactions | 21,557 | 338,636 | 26 | 3,717 |
 
-See [manifest.json](manifest.json) for source/download URLs, citations, timestamps, archive sizes, SHA-256 checksums, and loading statistics. Pinned source definitions are in [sources.py](../../src/datasets/sources.py).
+See [manifest.json](manifest.json) for source/download URLs, citations, timestamps, archive sizes, SHA-256 checksums, and loading statistics. Pinned source definitions are in [sources.py](../src/datasets/sources.py).
 
 ### Original releases
 
@@ -26,7 +26,7 @@ These are historical snapshots, not live networks. Published counts may differ f
 
 ## Storage and licensing
 
-- Raw archives remain in the local raw subdirectory, unchanged and without filesystem extraction.
+- Raw archives remain in `data/raw/`, unchanged and without filesystem extraction.
 - The archives total approximately 2 MiB. No profiles, product text, or credentials are downloaded.
 - Explicit redistribution licenses have not been verified on the source pages. Public availability does not imply unrestricted redistribution. Raw archives are therefore Git-ignored; provenance, checksums, statistics, and download code can be versioned.
 - Datasets do not inherit the project's code license. Check source terms and citation requirements before publishing archives or derived subgraphs.
@@ -45,12 +45,12 @@ To select datasets or use a different directory:
 
 ```bash
 python -m src.datasets.download --datasets facebook power
-python -m src.datasets.download --data-dir /path/to/real
+python -m src.datasets.download --data-dir /path/to/data
 ```
 
 Existing files are verified before use; a matching cache requires no network request. Corrupt files are never overwritten automatically: explicitly move or remove them before downloading again. Downloads use temporary files and atomic installation after checksum verification. HTTPS is required and HTTP downgrade redirects are rejected. Failures are reported without automatic retries. No API key is needed.
 
-The dataset downloader's `--verify-only` option checks local archives and prints statistics without network access or file changes. It is separate from the benchmark runner, which directly evaluates Jev. The default data directory is based on the source checkout, not the working directory; other installation layouts should set `--data-dir` / `data_dir` explicitly.
+The dataset downloader's `--verify-only` option checks local archives and prints statistics without network access or file changes. It is separate from the benchmark runner, which directly evaluates Jev. The default data directory is the checkout's `data/`, not the working directory; other installation layouts should set `--data-dir` / `data_dir` explicitly. Configurations made before the directory flattening may still name the old nested path; update new configurations, but never rewrite archived run configurations or their hashes.
 
 ## Unified interface
 

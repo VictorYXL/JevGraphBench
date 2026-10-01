@@ -18,11 +18,11 @@ import sys
 import time
 from types import SimpleNamespace
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from scripts import extended_graph_suite as audit
-from scripts import paired_graph_ablation as shared
+from src.utils import extended_graph_suite as audit
+from src.utils import paired_graph_ablation as shared
 from src.benchmark import public_tasks as tasks
 from src.benchmark.config import ModelConfig
 from src.clients.base import DecisionClientError, InvalidResponseError
@@ -78,9 +78,7 @@ def now():
 
 
 def code_hashes():
-    hashes = audit.code_hashes()
-    hashes["scripts/public_graph_suite.py"] = digest(Path(__file__))
-    return dict(sorted(hashes.items()))
+    return audit.code_hashes()
 
 
 def freeze_source(root, hashes):

@@ -15,5 +15,5 @@ dist/
 output/
 results/
 assets/paper/
-data/real/raw/
+data/raw/
 *.log

@@ -10,7 +10,7 @@ run:
 
 data:
   datasets: ["facebook", "ca-grqc", "power", "human-ppi"]
-  data_dir: "../data/real"
+  data_dir: "../data"
 
 sampling:
   method: "connected_frontier"

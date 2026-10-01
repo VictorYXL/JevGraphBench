@@ -24,7 +24,7 @@ import sys
 import tempfile
 import warnings
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
@@ -40,6 +40,7 @@ from src.benchmark.runner import export_prepared, run_experiment, summarize
 from src.clients.base import BaseDecisionClient, DecisionClientError
 from src.clients.registry import create_client
 from src.datasets import load_graph
+from src.datasets.sources import DEFAULT_DATA_DIR
 
 SEED = 20260925
 DEFAULT_ROOT = REPO / "output/paired-graph-dev-20260923-v4-seven-models"
@@ -92,10 +93,8 @@ def read_rows(path):
 
 
 def code_hashes():
-    # Include the orchestration and dataset code too: additions/deletions also drift.
-    paths = [Path(__file__).resolve()]
-    for directory in ("benchmark", "clients", "datasets"):
-        paths.extend((REPO / "src" / directory).rglob("*.py"))
+    # Freeze the entry point and complete packages, including every utility and marker.
+    paths = {REPO / "run_benchmark.py", *(REPO / "src").rglob("*.py")}
     return {p.relative_to(REPO).as_posix(): digest(p) for p in sorted(paths)}
 
 
@@ -216,7 +215,7 @@ def plan(root=DEFAULT_ROOT, *, data_dir=None, prior=DEFAULT_PRIOR, loader=None,
     arms = [BASELINE] if single_prompt else arm_order()
     root = Path(root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=False)
-    data_dir = (REPO / "data/real" if data_dir is None else Path(data_dir)).expanduser().resolve()
+    data_dir = (DEFAULT_DATA_DIR if data_dir is None else Path(data_dir)).expanduser().resolve()
     prior = Path(prior).expanduser().resolve()
     frozen_code = code_hashes()
     prior_sha = digest(prior)
@@ -655,7 +654,7 @@ def main(argv=None):
         p = sub.add_parser(command)
         p.add_argument("--root", type=Path, default=DEFAULT_ROOT)
         if command == "plan":
-            p.add_argument("--data-dir", type=Path, default=REPO / "data/real")
+            p.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
             p.add_argument("--prior", type=Path, default=DEFAULT_PRIOR)
             p.add_argument("--output-format", choices=("json", "answer_only"), default="answer_only")
             p.add_argument("--single-prompt", action="store_true",

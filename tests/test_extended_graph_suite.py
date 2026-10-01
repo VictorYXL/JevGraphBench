@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from scripts import extended_graph_suite as suite
+from src.utils import extended_graph_suite as suite
 from src.benchmark import extended_tasks as tasks
 from src.benchmark.config import ModelConfig, load_config
 from src.clients.base import (
@@ -145,7 +145,10 @@ class ExtendedSuiteTests(unittest.TestCase):
     def test_plan_snapshots_exact_hashed_source_files_as_read_only(self):
         self.plan()
         manifest = suite.read_json(self.root / "manifest.json")
-        self.assertIn("src/__init__.py", manifest["code_sha256"])
+        expected = {"run_benchmark.py", *(
+            p.relative_to(REPO).as_posix() for p in (REPO / "src").rglob("*.py"))}
+        self.assertEqual(set(manifest["code_sha256"]), expected)
+        self.assertIn("src/utils/__init__.py", manifest["code_sha256"])
         self.assertEqual(manifest["source_snapshot"], "frozen-source")
         snapshot = self.root / manifest["source_snapshot"]
         self.assertEqual({p.relative_to(snapshot).as_posix() for p in snapshot.rglob("*") if p.is_file()},
@@ -161,13 +164,13 @@ class ExtendedSuiteTests(unittest.TestCase):
     def test_snapshot_subprocess_imports_own_src_and_reports_from_workspace(self):
         self.plan()
         snapshot = self.root / "frozen-source"
-        script = snapshot / "scripts" / "extended_graph_suite.py"
+        script = snapshot / "src" / "utils" / "extended_graph_suite.py"
         probe = (
             "import json,runpy,sys;"
             "runpy.run_path(sys.argv[1],run_name='snapshot_import_check');"
             "print(json.dumps({name:sys.modules[name].__file__ "
             "for name in ('src','src.benchmark.config','src.benchmark.extended_tasks',"
-            "'scripts.paired_graph_ablation')}))")
+            "'src.utils','src.utils.paired_graph_ablation')}))")
         imported = subprocess.run([sys.executable, "-B", "-c", probe, str(script)],
                                   cwd=REPO, text=True, capture_output=True, timeout=30, check=True)
         for name, path in json.loads(imported.stdout).items():
@@ -181,6 +184,34 @@ class ExtendedSuiteTests(unittest.TestCase):
         self.assertEqual(report["models"]["jev"]["status"], "not_started")
         self.assertEqual(report["budgets"]["instances_per_model"], len(self.instances))
         self.assertEqual(before, self.artifacts())
+
+    def test_all_frozen_utilities_and_entrypoints_execute_without_checkout(self):
+        self.plan()
+        snapshot = self.root / "frozen-source"
+        scripts = [snapshot / "run_benchmark.py", *sorted((snapshot / "src" / "utils").glob("*.py"))]
+        for script in scripts:
+            if script.name == "__init__.py":
+                continue
+            with self.subTest(script=script.name):
+                # The root CLI uses normal script-directory imports; utilities
+                # explicitly discover the frozen checkout even in isolated mode.
+                flags = [] if script.name == "run_benchmark.py" else ["-I"]
+                result = subprocess.run(
+                    [sys.executable, "-B", *flags, str(script), "--help"],
+                    cwd=self.workspace, text=True, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+        for module in ("src.benchmark", "src.utils.extended_graph_suite"):
+            with self.subTest(module=module):
+                result = subprocess.run(
+                    [sys.executable, "-B", "-m", module, "--help"],
+                    cwd=snapshot, text=True, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+        audited = subprocess.run(
+            [sys.executable, "-B", str(snapshot / "src/utils/audit_task_shortcuts.py"),
+             "--root", str(self.root)],
+            cwd=self.workspace, text=True, capture_output=True, timeout=30)
+        self.assertEqual(audited.returncode, 0, audited.stderr)
+        self.assertEqual(json.loads(audited.stdout)["degree_exact"]["instances"], 1)
 
     def test_snapshot_tampering_or_missing_package_marker_is_refused(self):
         self.plan()

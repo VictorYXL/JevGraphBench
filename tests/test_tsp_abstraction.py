@@ -8,13 +8,14 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 import random
+import subprocess
 import sys
 import tempfile
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from scripts import tsp_abstraction_suite as suite
+from src.utils import tsp_abstraction_suite as suite
 from src.benchmark import tsp_abstraction as abstraction
 from src.benchmark import public_tasks
 from src.clients.base import DecisionResponse, TokenUsage, ClientTimeoutError, ProviderHTTPError
@@ -56,6 +57,28 @@ class FakeClient:
 
 
 class AbstractionTests(unittest.TestCase):
+    def test_source_snapshot_keeps_utilities_and_pinned_regression(self):
+        hashes = suite.code_hashes()
+        self.assertEqual(set(hashes), {*suite.audit.code_hashes(), "tests/test_tsp_abstraction.py"})
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            suite.freeze(root, hashes)
+            snapshot = root / suite.audit.SOURCE_SNAPSHOT
+            script = snapshot / "src" / "utils" / "tsp_abstraction_suite.py"
+            probe = (
+                "import json,runpy,sys;"
+                "module=runpy.run_path(sys.argv[1],run_name='snapshot_probe');"
+                "print(json.dumps({'hashes':module['code_hashes'](),"
+                "'root':str(module['REPO']),"
+                "'public':module['public'].__file__}))")
+            result = subprocess.run(
+                [sys.executable, "-B", "-I", "-c", probe, str(script)],
+                cwd=root, capture_output=True, text=True, timeout=30, check=True)
+            restored = json.loads(result.stdout)
+            self.assertEqual(restored["hashes"], hashes)
+            self.assertEqual(Path(restored["root"]), snapshot)
+            self.assertTrue(Path(restored["public"]).is_relative_to(snapshot))
+
     def test_prior_art_has_no_local_file_dependency(self):
         with patch.object(suite, "digest", side_effect=AssertionError("unexpected file read")):
             record = suite.prior_art()
@@ -124,15 +147,15 @@ class AbstractionTests(unittest.TestCase):
 
     def test_fixed_rule_and_random_baselines(self):
         record = fixture()
+        rows = {}
         for method in (*abstraction.RULES, "shortest_edge_selector", "random_candidate",
                        "nearest_neighbor", "nearest_neighbor_two_opt"):
-            row = suite.baseline_episode(record, method, 17)
+            rows[method] = row = suite.baseline_episode(record, method, 17)
             self.assertTrue(row["feasible"])
             self.assertEqual(row["objective"], suite.independent_objective(record, row["decisions"]))
             self.assertEqual(row["decisions"], suite.baseline_episode(record, method, 17)["decisions"])
-        nn = suite.baseline_episode(record, "nearest_neighbor", 17)
-        selector = suite.baseline_episode(record, "shortest_edge_selector", 17)
-        self.assertEqual(nn["decisions"], selector["decisions"])
+        self.assertEqual(rows["nearest_neighbor"]["decisions"],
+                         rows["shortest_edge_selector"]["decisions"])
 
     def test_documented_source_real_distance(self):
         prep = abstraction.prepare(fixture([[347.42, 278.65], [461.42, 193.15], [0, 0]]))
@@ -174,19 +197,18 @@ class EpisodeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(suite.shared.Refusal):
             suite.replay_episode(record, damaged, config, "B")
 
-    async def test_timeout_retained_without_retry(self):
-        _, _, rows, result, abort = await self.execute(error=ClientTimeoutError("test"))
-        self.assertFalse(result["feasible"])
-        self.assertEqual(result["model_calls"], 1)
-        self.assertIsNone(result["objective"])
-        self.assertFalse(abort.is_set())
-        self.assertEqual(rows[-1]["attempt"]["diagnostic_code"], "timeout")
-
-    async def test_fatal_error_aborts_lane(self):
-        _, _, _, result, abort = await self.execute(error=ProviderHTTPError(401))
-        self.assertFalse(result["feasible"])
-        self.assertEqual(result["model_calls"], 1)
-        self.assertTrue(abort.is_set())
+    async def test_failures_retained_without_retry_and_only_fatal_aborts_lane(self):
+        for error, fatal, diagnostic in (
+            (ClientTimeoutError("test"), False, "timeout"),
+            (ProviderHTTPError(401), True, "http_error"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                _, _, rows, result, abort = await self.execute(error=error)
+                self.assertFalse(result["feasible"])
+                self.assertEqual(result["model_calls"], 1)
+                self.assertIsNone(result["objective"])
+                self.assertEqual(abort.is_set(), fatal)
+                self.assertEqual(rows[-1]["attempt"]["diagnostic_code"], diagnostic)
 
     async def test_invalid_probability_preserves_native_action(self):
         _, _, rows, result, _ = await self.execute(provider="jev")

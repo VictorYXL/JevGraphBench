@@ -6,7 +6,7 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from scripts.tsp_abstraction_report import baseline_tables
+from src.utils.tsp_abstraction_report import baseline_tables
 
 
 class ReportingTests(unittest.TestCase):

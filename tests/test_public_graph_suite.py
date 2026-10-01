@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts import public_graph_suite as suite
+from src.utils import public_graph_suite as suite
 from src.clients.base import (
     BaseDecisionClient, ClientCapabilities, ClientTimeoutError, DecisionResponse,
     ProviderHTTPError, TokenUsage,
@@ -104,7 +104,7 @@ class PublicSuiteTests(unittest.TestCase):
                 self.assertIsNotNone(row["objective"])
         self.assertTrue(all(client.closed for client in self.clients))
         self.assertEqual(report, suite.report(self.root))
-        frozen = self.root / suite.audit.SOURCE_SNAPSHOT / "scripts" / "public_graph_suite.py"
+        frozen = self.root / suite.audit.SOURCE_SNAPSHOT / "src" / "utils" / "public_graph_suite.py"
         replay = subprocess.run([sys.executable, str(frozen), "report", "--root", str(self.root)],
                                 capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(replay.stdout), report)

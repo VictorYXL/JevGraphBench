@@ -17,7 +17,7 @@ import httpx
 import networkx as nx
 import yaml
 
-from src.benchmark.__main__ import main
+from run_benchmark import main
 from src.benchmark.config import (
     BenchmarkConfig, DataConfig, ModelConfig, RunConfig, SamplingConfig, TaskConfig, load_config,
 )
@@ -80,7 +80,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.planned_graphs, 60)
         self.assertEqual(config.planned_questions, 240)
         self.assertEqual(config.run.repetitions, 1)
-        self.assertEqual(config.data.data_dir, TEMPLATE.parent.parent / "data" / "real")
+        self.assertEqual(config.data.data_dir, TEMPLATE.parent.parent / "data")
         self.assertEqual(config.sha256, load_config(TEMPLATE).sha256)
         self.assertEqual(len(config.sha256), 64)
 
@@ -379,7 +379,7 @@ class JevYamlCliTests(unittest.TestCase):
 
     def test_removed_execute_flag_is_rejected(self):
         with patch("sys.stderr", new_callable=io.StringIO), \
-             patch("src.benchmark.__main__.run_experiment") as run:
+             patch("run_benchmark.run_experiment") as run:
             with self.assertRaises(SystemExit) as caught:
                 main(self.args() + ["--execute"])
         self.assertEqual(caught.exception.code, 2)

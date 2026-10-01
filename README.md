@@ -566,12 +566,13 @@ is still `jevgraphbench`.
 
 | Path | Purpose |
 | --- | --- |
+| [run_benchmark.py](run_benchmark.py) | Main YAML CLI: argument parsing, configuration, evaluation and JSON summary |
 | [src/benchmark/](src/benchmark/) | Public-data preparation, task generation/scoring, small-graph trajectory analysis and experiment runners |
 | [src/clients/](src/clients/) | Jev, vLLM and optional GitHub Copilot clients |
 | [src/datasets/](src/datasets/) | Real-network download, parsing and verification |
+| [src/utils/](src/utils/) | Six importable runtime, reporting and audit utilities, described below |
 | [configs/](configs/) | YAML configuration templates |
-| [data/real/](data/real/) | Dataset metadata; downloaded archives are ignored |
-| [scripts/](scripts/) | Six core runtime, reporting and audit utilities, described below |
+| [data/](data/) | Dataset README and manifest; downloaded archives in `data/raw/` are ignored |
 | [tests/](tests/) | Core regression tests only |
 | `output/`, `results/` | Ignored local artifacts; never required merely to import the core |
 
@@ -602,7 +603,7 @@ python -m pip install -e '.[copilot]'
 ### Real-network evaluation
 
 Inspect [configs/pilot.yaml](configs/pilot.yaml) and
-[data/real/README.md](data/real/README.md) before running:
+[data/README.md](data/README.md) before running:
 
 ```bash
 python run_benchmark.py --config configs/pilot.yaml
@@ -610,8 +611,10 @@ python run_benchmark.py --config configs/pilot.yaml
 
 **This starts live evaluation and may download the configured datasets.**
 The Jev client reads `TYPESAFE_API_KEY` from the environment; do not put
-credentials in configuration files. The alternative module entry point is
-`python -m src.benchmark --config configs/pilot.yaml`.
+credentials in configuration files. `run_benchmark.py` owns the CLI logic.
+The existing `python -m src.benchmark --config configs/pilot.yaml` command
+is retained as a thin compatibility delegate to that same entry point,
+including in installed packages; there is no second argument parser.
 Provider, endpoint, model and inference settings are explicit in the YAML
 configuration. Do not assume that a locally running endpoint serves the
 requested model.
@@ -626,30 +629,30 @@ modularity with at most two communities.
 Create a small, independently checked plan **without model calls**:
 
 ```bash
-python scripts/extended_graph_suite.py plan \
+python -m src.utils.extended_graph_suite plan \
   --root output/smoke-plan --design structural_dev \
   --node-counts 8 --samples-per-size 1 --models jev
-python scripts/extended_graph_suite.py report --root output/smoke-plan
+python -m src.utils.extended_graph_suite report --root output/smoke-plan
 ```
 
 Use a new output directory for each plan; existing plans are not overwritten.
 The `structural_holdout` design additionally requires an explicit historical
 graph pool via `--prior-pool`. Supported model lanes and options are listed by
-`python scripts/extended_graph_suite.py plan --help`.
+`python -m src.utils.extended_graph_suite plan --help`.
 The lane `gpt6astra` denotes GPT-6-Astra, not an additional model.
 
 After checking the generated configuration and provider availability, the
 following command makes **live model calls**:
 
 ```bash
-python scripts/extended_graph_suite.py run --root output/smoke-plan --models jev
+python -m src.utils.extended_graph_suite run --root output/smoke-plan --models jev
 ```
 
 Analyze a completed or interrupted **sealed** core-suite run without model
 calls or modifications to its artifacts:
 
 ```bash
-python scripts/extended_graph_suite.py analyze \
+python -m src.utils.extended_graph_suite analyze \
   --root output/smoke-plan --models jev
 ```
 
@@ -662,19 +665,37 @@ Like `report`, it refuses changed frozen source or corrupt artifacts: use the
 matching source snapshot for old runs rather than editing their manifests.
 The bundled JSON example can be replayed independently of historical runners.
 
-The retained scripts are:
+The retained utility modules are:
 
-- [extended_graph_suite.py](scripts/extended_graph_suite.py): plan, run, report and offline analyze.
-- [public_graph_suite.py](scripts/public_graph_suite.py): frozen full-input public
+- [extended_graph_suite.py](src/utils/extended_graph_suite.py): plan, run, report and offline analyze.
+- [public_graph_suite.py](src/utils/public_graph_suite.py): frozen full-input public
   optimization plans, live evaluation and independently replayed reports.
-- [tsp_abstraction_suite.py](scripts/tsp_abstraction_suite.py): fixed-protocol
+- [tsp_abstraction_suite.py](src/utils/tsp_abstraction_suite.py): fixed-protocol
   supplementary candidate-city and rule-group comparisons.
-- [tsp_abstraction_report.py](scripts/tsp_abstraction_report.py): offline
+- [tsp_abstraction_report.py](src/utils/tsp_abstraction_report.py): offline
   supplementary tables, including failures, paired coverage and timing.
-- [paired_graph_ablation.py](scripts/paired_graph_ablation.py): shared model
+- [paired_graph_ablation.py](src/utils/paired_graph_ablation.py): shared model
   configuration, preflight, locking and integrity utilities required by the suite.
-- [audit_task_shortcuts.py](scripts/audit_task_shortcuts.py): offline label and
+- [audit_task_shortcuts.py](src/utils/audit_task_shortcuts.py): offline label and
   simple-feature audits used by the structural task tests.
+
+Prefer `python -m src.utils.<module>` from the checkout or installed package.
+Direct paths such as `python src/utils/extended_graph_suite.py --help` also
+work, including when invoked by absolute path from another working directory.
+New source snapshots include `run_benchmark.py` and the complete `src/`
+packages, including all six utilities and package markers. For example:
+
+```bash
+python output/smoke-plan/frozen-source/src/utils/extended_graph_suite.py \
+  report --root output/smoke-plan
+```
+
+Historical snapshots retain their original `scripts/` paths, source hashes
+and CLI behavior. Use the matching archived runner for those runs; the new
+utilities intentionally reject source drift. No legacy `scripts/` shims are
+installed, and archived source, configuration and experimental data are not
+rewritten by this layout change. Raw archives now live in `data/raw/`;
+their pinned bytes and the manifest's relative `raw/` paths are unchanged.
 
 Historical all-model orchestration, graph–text evaluation and remote machine
 management are archived, not part of this minimal CLI. Their verified
@@ -706,13 +727,13 @@ reverse numerator for maximization. A negative gap to a best-known value is
 not clamped; an improvement over a supposedly proven optimum raises an error.
 
 ```bash
-python scripts/public_graph_suite.py prepare --root output/public-data
-python scripts/public_graph_suite.py plan \
+python -m src.utils.public_graph_suite prepare --root output/public-data
+python -m src.utils.public_graph_suite plan \
   --root output/public-plan --inputs output/public-data/instances.json \
   --models jev qwen08 qwen2 qwen4 qwen9 --repeats 3 --concurrency 4
-python scripts/public_graph_suite.py report --root output/public-plan
+python -m src.utils.public_graph_suite report --root output/public-plan
 # The next command makes live model calls:
-python scripts/public_graph_suite.py run --root output/public-plan
+python -m src.utils.public_graph_suite run --root output/public-plan
 ```
 
 `prepare` is the explicit download step. It verifies pinned archive and raw

@@ -21,11 +21,11 @@ import sys
 import time
 from types import SimpleNamespace
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 sys.dont_write_bytecode = True
 
-from scripts import paired_graph_ablation as shared
+from src.utils import paired_graph_ablation as shared
 from src.benchmark import extended_tasks
 from src.clients.base import (
     ClientTimeoutError, DecisionClientError, DecisionResponse, InvalidResponseError,
@@ -115,12 +115,7 @@ def model_configs(models=DEFAULT_MODELS, *, seed=SEED, no_think_max_tokens=4096)
 
 
 def code_hashes():
-    paths = {Path(__file__).resolve(), Path(shared.__file__).resolve(), REPO / "src" / "__init__.py"}
-    if (REPO / "scripts" / "__init__.py").is_file():
-        paths.add(REPO / "scripts" / "__init__.py")
-    for directory in ("benchmark", "clients", "datasets"):
-        paths.update((REPO / "src" / directory).rglob("*.py"))
-    return {p.relative_to(REPO).as_posix(): digest(p) for p in sorted(paths)}
+    return shared.code_hashes()
 
 
 def verify_source_snapshot(root, hashes):

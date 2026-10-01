@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 # Source-checkout default; callers may supply an explicit data_dir elsewhere.
-DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "real"
+DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 @dataclass(frozen=True, slots=True)

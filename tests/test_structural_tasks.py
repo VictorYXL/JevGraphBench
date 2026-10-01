@@ -19,7 +19,7 @@ if str(REPO) not in sys.path:
 
 from src.benchmark import extended_tasks as tasks
 from src.benchmark import structural_tasks as structural
-from scripts.audit_task_shortcuts import audit
+from src.utils.audit_task_shortcuts import audit
 
 
 def graph(record):
