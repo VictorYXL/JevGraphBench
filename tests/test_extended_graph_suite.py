@@ -119,6 +119,13 @@ class ExtendedSuiteTests(unittest.TestCase):
     def scores(self, name="jev"):
         return suite.read_rows(self.root / "runs" / name / "scores.jsonl")
 
+    def artifacts(self):
+        return {p: (p.stat().st_mtime_ns, suite.digest(p))
+                for p in self.root.rglob("*") if p.is_file()}
+
+    def assert_fields(self, row, **expected):
+        self.assertEqual({key: row[key] for key in expected}, expected)
+
     def test_offline_plan_validates_and_freezes(self):
         with patch.object(tasks, "validate_instances", wraps=tasks.validate_instances) as validate:
             result = self.plan(("jev", "qwen9", "qwen9think"))
@@ -166,62 +173,66 @@ class ExtendedSuiteTests(unittest.TestCase):
         for name, path in json.loads(imported.stdout).items():
             with self.subTest(module=name):
                 self.assertTrue(Path(path).resolve().is_relative_to(snapshot))
-        before = {p: (p.stat().st_mtime_ns, suite.digest(p))
-                  for p in self.root.rglob("*") if p.is_file()}
+        before = self.artifacts()
         completed = subprocess.run(
             [sys.executable, str(script), "report", "--root", str(self.root)],
             cwd=REPO, text=True, capture_output=True, timeout=30, check=True)
         report = json.loads(completed.stdout)
         self.assertEqual(report["models"]["jev"]["status"], "not_started")
         self.assertEqual(report["budgets"]["instances_per_model"], len(self.instances))
-        after = {p: (p.stat().st_mtime_ns, suite.digest(p))
-                 for p in self.root.rglob("*") if p.is_file()}
-        self.assertEqual(before, after)
+        self.assertEqual(before, self.artifacts())
 
     def test_snapshot_tampering_or_missing_package_marker_is_refused(self):
         self.plan()
         path = self.root / "frozen-source" / "src" / "__init__.py"
         original = path.read_bytes()
-        path.chmod(0o644)
-        with self.assertRaises(suite.Refusal):
-            suite.report(self.root)
-        path.write_bytes(original + b"\n# unexpected change\n")
-        path.chmod(0o444)
-        with self.assertRaises(suite.Refusal):
-            suite.report(self.root)
-        path.unlink()
-        with self.assertRaises(suite.Refusal):
-            suite.report(self.root)
+        for damage in ("writable", "changed", "missing"):
+            with self.subTest(damage=damage):
+                if damage == "writable":
+                    path.chmod(0o644)
+                elif damage == "changed":
+                    path.write_bytes(original + b"\n# unexpected change\n")
+                    path.chmod(0o444)
+                else:
+                    path.unlink()
+                with self.assertRaises(suite.Refusal):
+                    suite.report(self.root)
 
-    def test_answer_only_protocol_frozen_for_all_non_typesafe_models(self):
-        self.plan(suite.MODELS)
+    def test_model_protocol_budgets_and_opt_in_sampling_are_frozen(self):
+        result = self.plan(suite.MODELS, no_think_max_tokens=64)
         _, manifest, _, configs = suite.load_plan(self.root)
+        self.assertEqual(result["no_think_max_tokens"], 64)
+        self.assertEqual(manifest["no_think_max_tokens"], 64)
         for name, config in configs.items():
             with self.subTest(model=name):
                 expected = None if config.provider == "typesafe" else "answer_only"
                 self.assertEqual(config.output_format, expected)
                 self.assertEqual(manifest["models"][name]["output_format"], expected)
                 if config.provider != "typesafe":
-                    self.assertEqual(config.client_kwargs()["output_format"], "answer_only")
-
-    def test_no_think_output_budget_frozen_without_changing_other_lanes(self):
-        result = self.plan(suite.MODELS, no_think_max_tokens=64)
-        _, manifest, _, configs = suite.load_plan(self.root)
-        self.assertEqual(result["no_think_max_tokens"], 64)
-        self.assertEqual(manifest["no_think_max_tokens"], 64)
-        for name in ("qwen08", "qwen2", "qwen4", "qwen9"):
-            self.assertFalse(configs[name].think)
-            self.assertEqual(configs[name].max_tokens, 64)
-            self.assertEqual(manifest["models"][name]["max_tokens"], 64)
-        self.assertEqual(configs["qwen9think"].max_tokens, 8192)
-        self.assertTrue(configs["qwen9think"].think)
-        self.assertEqual(configs["qwen9recommended"].max_tokens, 64)
-        self.assertFalse(configs["qwen9recommended"].think)
-        self.assertEqual(configs["qwen9thinkrecommended"].max_tokens, 8192)
-        self.assertTrue(configs["qwen9thinkrecommended"].think)
-        self.assertEqual(configs["gpt54"].max_tokens, 4096)
-        self.assertEqual(configs["gpt6astra"].max_tokens, 4096)
-        self.assertIsNone(configs["jev"].max_tokens)
+                    self.assertEqual(config.client_kwargs()["output_format"], expected)
+                budget = (None if name == "jev" else 4096 if name.startswith("gpt")
+                          else 8192 if "think" in name else 64)
+                self.assertEqual(config.max_tokens, budget)
+                self.assertEqual(manifest["models"][name]["max_tokens"], budget)
+                if name.startswith("qwen"):
+                    self.assertIs(config.think, "think" in name)
+        for name, expected in (
+            ("qwen9recommended", {"think": False, "max_tokens": 64,
+                                  "temperature": 1.0, "top_p": 1.0, "top_k": 40,
+                                  "presence_penalty": 2.0, "timeout_seconds": 180.0}),
+            ("qwen9thinkrecommended", {"think": True, "max_tokens": 8192,
+                                       "temperature": 1.0, "top_p": 0.95, "top_k": 20,
+                                       "presence_penalty": 1.5, "timeout_seconds": 360.0}),
+        ):
+            with self.subTest(model=name):
+                for field, value in expected.items():
+                    self.assertEqual(getattr(configs[name], field), value)
+                    self.assertEqual(manifest["models"][name][field], value)
+                    self.assertEqual(configs[name].client_kwargs()[field], value)
+                self.assertEqual(configs[name].model, configs["qwen9"].model)
+                self.assertEqual(configs[name].base_url, configs["qwen9"].base_url)
+        self.assertFalse(set(suite.DEFAULT_MODELS) & {
+            "qwen9think", "qwen9recommended", "qwen9thinkrecommended", "qwen9constrained"})
         captured = []
         def factory(provider, **kwargs):
             captured.append(kwargs["max_tokens"])
@@ -241,13 +252,18 @@ class ExtendedSuiteTests(unittest.TestCase):
         self.assertEqual(configs["qwen9"].max_tokens, 4096)
         self.assertEqual(suite.report(self.root)["no_think_max_tokens"], 4096)
 
-    def test_invalid_no_think_output_budgets_refused(self):
+    def test_invalid_budgets_and_sizes_refused_before_plan_creation(self):
         for value in (0, -1, True, False, "64", 64.0, None):
             with self.subTest(value=value):
                 with self.assertRaises(suite.Refusal):
                     self.plan(no_think_max_tokens=value)
                 with self.assertRaises(suite.Refusal):
                     suite.model_configs(no_think_max_tokens=value)
+        for sizes in ((), (6, 6), (4,), (13,), ("6",)):
+            with self.subTest(sizes=sizes), self.assertRaises(suite.Refusal):
+                self.plan(design="curriculum", node_counts=sizes)
+        with self.assertRaises(suite.Refusal):
+            self.plan(design="pilot", node_counts=(6,))
         self.assertFalse(self.root.exists())
 
     def test_no_think_budget_cli_and_frozen_config_consistency(self):
@@ -276,28 +292,6 @@ class ExtendedSuiteTests(unittest.TestCase):
             with suite.lane_locks(("jev", *sorted(suite.QWEN9_LANES))):
                 self.assertEqual(suite.shared.tempfile.tempdir, before)
         self.assertEqual(seen, [["jev", "qwen9"]])
-
-    def test_opt_in_recommended_qwen_sampling_settings_are_frozen(self):
-        self.plan(suite.MODELS, no_think_max_tokens=64)
-        _, manifest, _, configs = suite.load_plan(self.root)
-        for name, expected in (
-            ("qwen9recommended", {"think": False, "temperature": 1.0, "top_p": 1.0,
-                                  "top_k": 40, "presence_penalty": 2.0,
-                                  "max_tokens": 64, "timeout_seconds": 180.0}),
-            ("qwen9thinkrecommended", {"think": True, "temperature": 1.0, "top_p": 0.95,
-                                       "top_k": 20, "presence_penalty": 1.5,
-                                       "max_tokens": 8192, "timeout_seconds": 360.0}),
-        ):
-            with self.subTest(model=name):
-                for field, value in expected.items():
-                    self.assertEqual(getattr(configs[name], field), value)
-                    self.assertEqual(manifest["models"][name][field], value)
-                    self.assertEqual(configs[name].client_kwargs()[field], value)
-                self.assertEqual(configs[name].model, configs["qwen9"].model)
-                self.assertEqual(configs[name].base_url, configs["qwen9"].base_url)
-                self.assertEqual(configs[name].output_format, "answer_only")
-        self.assertFalse(set(suite.DEFAULT_MODELS) & {
-            "qwen9think", "qwen9recommended", "qwen9thinkrecommended", "qwen9constrained"})
 
     def test_constrained_reference_alias_is_opt_in_and_frozen(self):
         self.plan(("qwen9", "qwen9constrained"), no_think_max_tokens=64)
@@ -362,103 +356,66 @@ class ExtendedSuiteTests(unittest.TestCase):
                     VLLMClient(**kwargs)
                 transport.assert_not_called()
 
-    def test_constrained_mock_transport_wire_uses_current_options_without_probabilities(self):
+    def test_choice_constraints_wire_dynamic_options_and_strict_failures(self):
         payloads = []
-        def handler(request):
-            payload = json.loads(request.content)
-            payloads.append(payload)
-            selected = payload["structured_outputs"]["choice"][-1]
-            return httpx.Response(200, json={"model": "local", "choices": [{
-                "finish_reason": "stop", "message": {"role": "assistant", "content": selected}}]})
-        async def run():
-            client = VLLMClient(model="local", think=False, output_format="answer_only",
-                                constrain_choices=True, max_tokens=64,
-                                transport=httpx.MockTransport(handler))
-            try:
-                for options in (("1", "2", "3"), ("1", "2")):
-                    request = DecisionRequest("choice", {"nodes": [1, 2, 3]}, "Choose a vertex.",
-                                              tuple(DecisionOption(id=o) for o in options))
-                    response = await client.predict(request)
-                    self.assertEqual(response.selected_option_id, options[-1])
-                    self.assertIsNone(response.probabilities)
-                    self.assertIsNone(response.probability_kind)
-                    self.assertIsNone(response.confidence)
-            finally:
-                await client.aclose()
-        asyncio.run(run())
-        self.assertEqual([p["structured_outputs"] for p in payloads],
-                         [{"choice": ["1", "2", "3"]}, {"choice": ["1", "2"]}])
-        self.assertTrue(all(p["chat_template_kwargs"] == {"enable_thinking": False}
-                            and p["max_tokens"] == 64 for p in payloads))
-        self.assertTrue(all("response_format" not in p for p in payloads))
 
-    def test_constrained_output_still_rejects_invalid_or_truncated_answers(self):
-        request = DecisionRequest("choice", {}, "Choose.", (
-            DecisionOption(id="A"), DecisionOption(id="B")))
-        async def run():
-            for content, finish in (("A because it is optimal", "stop"), ("C", "stop"), ("A", "length")):
-                def handler(unused):
-                    return httpx.Response(200, json={"model": "local", "choices": [{
-                        "finish_reason": finish, "message": {"role": "assistant", "content": content}}]})
-                client = VLLMClient(model="local", think=False, output_format="answer_only",
-                                    constrain_choices=True, transport=httpx.MockTransport(handler))
-                try:
-                    with self.subTest(content=content, finish=finish), \
-                            self.assertRaises(InvalidResponseError) as error:
-                        await client.predict(request)
-                    self.assertEqual(error.exception.diagnostic_code,
-                                     "finish_length" if finish == "length" else "invalid_choice")
-                finally:
-                    await client.aclose()
-        asyncio.run(run())
-
-    def test_default_and_disabled_client_wire_remain_unconstrained(self):
-        payloads = []
-        def handler(request):
-            payloads.append(json.loads(request.content))
+        def handler(wire):
+            payloads.append(json.loads(wire.content))
             return httpx.Response(200, json={"model": "local", "choices": [{
-                "finish_reason": "stop", "message": {"role": "assistant", "content": "A"}}]})
+                "finish_reason": finish, "message": {"role": "assistant", "content": content}}]})
+
         async def run():
-            request = DecisionRequest("choice", {}, "Choose.", (
-                DecisionOption(id="A"), DecisionOption(id="B")))
-            for kwargs in ({}, {"constrain_choices": False}):
-                client = VLLMClient(model="local", output_format="answer_only",
-                                    transport=httpx.MockTransport(handler), **kwargs)
-                try:
-                    await client.predict(request)
-                finally:
-                    await client.aclose()
+            nonlocal content, finish
+            for kwargs in ({}, {"constrain_choices": False},
+                           {"constrain_choices": True, "think": False, "max_tokens": 64}):
+                with self.subTest(settings=kwargs):
+                    async with VLLMClient(model="local", output_format="answer_only",
+                                          transport=httpx.MockTransport(handler), **kwargs) as client:
+                        options_cases = (("1", "2", "3"), ("1", "2")) if kwargs.get(
+                            "constrain_choices") else (("A", "B"),)
+                        for options in options_cases:
+                            request = DecisionRequest("choice", {}, "Choose.",
+                                                      tuple(DecisionOption(id=o) for o in options))
+                            content, finish = options[-1], "stop"
+                            response = await client.predict(request)
+                            self.assertEqual(response.selected_option_id, options[-1])
+                            self.assertIsNone(response.probabilities)
+                            self.assertIsNone(response.probability_kind)
+                            self.assertIsNone(response.confidence)
+                        if kwargs.get("constrain_choices"):
+                            for content, finish in (("1 because ...", "stop"), ("C", "stop"),
+                                                    ("1", "length")):
+                                with self.subTest(content=content, finish=finish), \
+                                        self.assertRaises(InvalidResponseError) as error:
+                                    await client.predict(request)
+                                self.assertEqual(error.exception.diagnostic_code,
+                                                 "finish_length" if finish == "length" else "invalid_choice")
+        content, finish = None, None
         asyncio.run(run())
         self.assertEqual(payloads[0], payloads[1])
         self.assertNotIn("structured_outputs", payloads[0])
+        self.assertEqual([p["structured_outputs"] for p in payloads[2:4]],
+                         [{"choice": ["1", "2", "3"]}, {"choice": ["1", "2"]}])
+        for payload in payloads[2:]:
+            self.assert_fields(payload, chat_template_kwargs={"enable_thinking": False}, max_tokens=64)
+        self.assertTrue(all("response_format" not in p for p in payloads))
 
-    def test_runtime_curriculum_builder_arguments(self):
-        with patch.object(tasks, "build_curriculum", create=True,
-                          return_value=deepcopy(self.instances)) as builder:
-            self.plan(design="curriculum", seed=42, samples_per_size=3)
-        builder.assert_called_once_with(seed=42, node_counts=tuple(range(5, 13)),
-                                        samples_per_size=3)
-        manifest = suite.read_json(self.root / "manifest.json")
-        self.assertEqual(manifest["samples_per_size"], 3)
-        self.assertEqual(manifest["node_counts"], list(range(5, 13)))
-
-    def test_curriculum_size_subset_and_default_models(self):
-        with patch.object(tasks, "build_curriculum", create=True,
-                          return_value=deepcopy(self.instances)) as builder:
-            suite.plan(self.root, design="curriculum", node_counts=(6,))
-        builder.assert_called_once_with(seed=suite.SEED, node_counts=(6,), samples_per_size=2)
-        manifest = suite.read_json(self.root / "manifest.json")
-        self.assertEqual(manifest["node_counts"], [6])
-        self.assertEqual(set(manifest["models"]), set(suite.shared.MODELS))
-        self.assertNotIn("qwen9think", manifest["models"])
-
-    def test_invalid_sizes_refused_before_plan_creation(self):
-        for sizes in ((), (6, 6), (4,), (13,), ("6",)):
-            with self.subTest(sizes=sizes), self.assertRaises(suite.Refusal):
-                self.plan(design="curriculum", node_counts=sizes)
-        with self.assertRaises(suite.Refusal):
-            self.plan(design="pilot", node_counts=(6,))
-        self.assertFalse(self.root.exists())
+    def test_curriculum_builder_arguments_and_default_models(self):
+        for kwargs, seed, sizes, samples in (
+            ({"seed": 42, "samples_per_size": 3}, 42, tuple(range(5, 13)), 3),
+            ({"node_counts": (6,)}, suite.SEED, (6,), 2),
+        ):
+            with self.subTest(kwargs=kwargs), patch.object(
+                    tasks, "build_curriculum", create=True,
+                    return_value=deepcopy(self.instances)) as builder:
+                root = self.workspace / f"curriculum-{samples}"
+                suite.plan(root, design="curriculum", **kwargs)
+                builder.assert_called_once_with(seed=seed, node_counts=sizes, samples_per_size=samples)
+                manifest = suite.read_json(root / "manifest.json")
+                self.assertEqual(manifest["samples_per_size"], samples)
+                self.assertEqual(manifest["node_counts"], list(sizes))
+                self.assertEqual(set(manifest["models"]), set(suite.shared.MODELS))
+                self.assertNotIn("qwen9think", manifest["models"])
 
     def test_node_counts_cli_thinking_probe(self):
         with patch.object(tasks, "build_curriculum", create=True,
@@ -484,38 +441,49 @@ class ExtendedSuiteTests(unittest.TestCase):
         self.assertNotIn("MUST_NOT_APPEAR", serialized)
         self.assertTrue(self.clients[0].closed)
         rows = self.scores()
-        self.assertEqual(rows[0]["decisions"], ["B"] * 4)
-        self.assertEqual(rows[0]["objective"], 1)
-        self.assertEqual(rows[0]["absolute_gap"], 3)
-        self.assertEqual(rows[0]["baseline_absolute_gap"], 0)
-        self.assertEqual(rows[0]["node_count"], 5)
-        self.assertEqual(rows[0]["edge_count"], 4)
+        self.assert_fields(rows[0], decisions=["B"] * 4, objective=1, absolute_gap=3,
+                           baseline_absolute_gap=0, node_count=5, edge_count=4)
         summary = result["models"]["jev"]
         self.assertNotIn("overall", summary)
         self.assertEqual(summary["by_task_and_size"]["maxcut_construct"]["5"]["instances"], 1)
 
-    def test_failure_stops_instance_without_repair(self):
-        self.plan()
-        error = InvalidResponseError("SECRET", raw_output={"SECRET": "TOKEN"},
-                                     diagnostic_code="finish_length", usage=TokenUsage(5, 8))
-        def factory(provider, **kwargs):
-            return FakeClient(kwargs["model"], lambda request, count: error if count == 2 else None)
-        result = self.run_lane(factory=factory)
-        rows = self.scores()
-        self.assertEqual(rows[0]["decisions"], ["B"])
-        self.assertFalse(rows[0]["feasible"])
-        self.assertIsNone(rows[0]["objective"])
-        self.assertEqual(rows[0]["query_count"], 2)
-        self.assertTrue(all(r["feasible"] for r in rows[1:]))
-        self.assertEqual(result["models"]["jev"]["status"], "completed_with_failures")
-        attempts = self.attempts()
-        self.assertEqual(attempts[1]["usage"]["output_tokens"], 8)
-        self.assertNotIn("SECRET", json.dumps(result) + json.dumps(attempts))
-        metrics = result["models"]["jev"]["by_task"]["maxcut_construct"]
-        self.assertEqual(metrics["feasibility_rate"], 0)
-        self.assertEqual(metrics["feasible_mean_denominator"], 0)
-        self.assertIsNone(metrics["mean_absolute_gap_feasible"])
-        self.assertEqual(metrics["baseline_denominator"], 1)
+    def test_failures_stop_without_retry_and_preserve_denominators(self):
+        invalid = InvalidResponseError("SECRET", raw_output={"SECRET": "TOKEN"},
+                                       diagnostic_code="finish_length", usage=TokenUsage(5, 8))
+        for error, step, code, fatal in (
+            (invalid, 2, "finish_length", False),
+            (ClientTimeoutError("SECRET"), 1, "timeout", False),
+            (ProviderHTTPError(503), 2, "http503", False),
+            (ClientTransportError("SECRET quota/context/auth"), 1, "client_error", True),
+        ):
+            with self.subTest(code=code):
+                self.root = self.workspace / code
+                self.plan()
+                def factory(provider, **kwargs):
+                    return FakeClient(kwargs["model"],
+                                      lambda request, count: error if count == step else None)
+                result = self.run_lane(factory=factory)
+                rows, attempts = self.scores(), self.attempts()
+                self.assertEqual(len(rows), 4)
+                self.assertEqual(len(attempts), step if fatal else step + 3)
+                if not isinstance(error, ProviderHTTPError):
+                    self.assertEqual(attempts[step - 1]["diagnostic_code"], code)
+                self.assertIs(attempts[step - 1]["fatal"], fatal)
+                self.assert_fields(rows[0], decisions=["B"] * (step - 1),
+                                   feasible=False, objective=None, query_count=step)
+                self.assertTrue(all(r["feasible"] is not fatal for r in rows[1:]))
+                self.assertEqual(result["models"]["jev"]["status"],
+                                 "aborted" if fatal else "completed_with_failures")
+                if not fatal:
+                    self.assertEqual(attempts[step]["instance_id"], self.instances[1]["id"])
+                if error is invalid:
+                    self.assertEqual(attempts[step - 1]["usage"]["output_tokens"], 8)
+                if isinstance(error, ProviderHTTPError):
+                    self.assertEqual(attempts[step - 1]["http_status"], 503)
+                self.assertNotIn("SECRET", json.dumps(result) + json.dumps(attempts))
+                metrics = result["models"]["jev"]["by_task"]["maxcut_construct"]
+                self.assert_fields(metrics, feasibility_rate=0, feasible_mean_denominator=0,
+                                   mean_absolute_gap_feasible=None, baseline_denominator=1)
 
     def test_fatal_http_aborts_only_one_lane(self):
         self.plan(("jev", "qwen2"))
@@ -530,26 +498,6 @@ class ExtendedSuiteTests(unittest.TestCase):
         self.assertEqual(len(rows), 4)
         self.assertTrue(all(not r["feasible"] for r in rows))
         self.assertEqual(sum(r["query_count"] == 0 for r in rows), 3)
-
-    def test_timeout_continues_next_instance(self):
-        self.plan()
-        def factory(provider, **kwargs):
-            return FakeClient(kwargs["model"], lambda request, count:
-                              ClientTimeoutError("TOKEN") if count == 1 else None)
-        self.run_lane(factory=factory)
-        self.assertEqual(len(self.attempts()), 4)
-        self.assertEqual(self.attempts()[0]["diagnostic_code"], "timeout")
-        self.assertFalse(self.attempts()[0]["fatal"])
-
-    def test_transport_context_or_quota_errors_fail_closed(self):
-        self.plan()
-        def factory(provider, **kwargs):
-            return FakeClient(kwargs["model"], lambda request, count:
-                              ClientTransportError("secret quota/context/auth details"))
-        self.run_lane(factory=factory)
-        self.assertEqual(len(self.attempts()), 1)
-        self.assertEqual(self.attempts()[0]["diagnostic_code"], "client_error")
-        self.assertTrue(self.attempts()[0]["fatal"])
 
     def test_preflight_initialization_and_close_errors_are_sealed(self):
         self.plan(("jev", "qwen2", "qwen4"))
@@ -606,10 +554,9 @@ class ExtendedSuiteTests(unittest.TestCase):
     def test_report_is_read_only_and_detects_tampering(self):
         self.plan()
         self.run_lane()
-        before = {p: (p.stat().st_mtime_ns, suite.digest(p)) for p in self.root.rglob("*") if p.is_file()}
+        before = self.artifacts()
         suite.report(self.root)
-        after = {p: (p.stat().st_mtime_ns, suite.digest(p)) for p in self.root.rglob("*") if p.is_file()}
-        self.assertEqual(before, after)
+        self.assertEqual(before, self.artifacts())
         path = self.root / "runs" / "jev" / "scores.jsonl"
         path.write_text(path.read_text().replace('"objective":1', '"objective":99'))
         with self.assertRaises(suite.Refusal):
@@ -624,8 +571,7 @@ class ExtendedSuiteTests(unittest.TestCase):
     def test_analyze_is_offline_read_only_and_matches_verified_scores(self):
         self.plan()
         self.run_lane()
-        before = {p: (p.stat().st_mtime_ns, suite.digest(p))
-                  for p in self.root.rglob("*") if p.is_file()}
+        before = self.artifacts()
         with patch.object(suite, "create_client", side_effect=AssertionError("no inference")):
             result = suite.analyze(self.root)
         self.assertEqual(result["model_calls"], 0)
@@ -633,15 +579,10 @@ class ExtendedSuiteTests(unittest.TestCase):
         self.assertEqual(lane["by_task"], suite.report(self.root)["models"]["jev"]["by_task"])
         self.assertEqual(lane["trajectory_analysis"]["status"], "verified")
         episode, = lane["trajectory_analysis"]["episodes"]
-        self.assertEqual(episode["decisions"], ["B"] * 4)
-        self.assertEqual(episode["absolute_gap"], 3)
-        self.assertEqual(episode["unavoidable_gap"], 3)
-        self.assertEqual(episode["first_loss_step"], 2)
-        self.assertEqual(episode["failure_count"], 0)
+        self.assert_fields(episode, decisions=["B"] * 4, absolute_gap=3,
+                           unavoidable_gap=3, first_loss_step=2, failure_count=0)
         self.assertEqual(sum(s["incremental_regret"] for s in episode["steps"]), 3)
-        after = {p: (p.stat().st_mtime_ns, suite.digest(p))
-                 for p in self.root.rglob("*") if p.is_file()}
-        self.assertEqual(before, after)
+        self.assertEqual(before, self.artifacts())
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(suite.main(["analyze", "--root", str(self.root)]), 0)
@@ -658,17 +599,10 @@ class ExtendedSuiteTests(unittest.TestCase):
         result = suite.analyze(self.root)
         lane = result["models"]["jev"]
         episode, = lane["trajectory_analysis"]["episodes"]
-        self.assertEqual(episode["decisions"], ["B", "B"])
-        self.assertEqual(episode["status"], "incomplete")
-        self.assertFalse(episode["feasible"])
-        self.assertEqual(episode["failure_count"], 1)
-        self.assertEqual(episode["query_count"], 3)
-        self.assertEqual(episode["unavoidable_gap"], 1)
-        self.assertEqual(episode["first_loss_step"], 2)
-        self.assertIsNone(episode["objective"])
-        self.assertIsNone(episode["absolute_gap"])
-        self.assertEqual(lane["by_task"]["maxcut_construct"]["instances"], 1)
-        self.assertEqual(lane["by_task"]["maxcut_construct"]["feasible"], 0)
+        self.assert_fields(episode, decisions=["B", "B"], status="incomplete", feasible=False,
+                           failure_count=1, query_count=3, unavoidable_gap=1, first_loss_step=2,
+                           objective=None, absolute_gap=None)
+        self.assert_fields(lane["by_task"]["maxcut_construct"], instances=1, feasible=0)
         self.assertNotIn("SECRET", json.dumps(result))
 
     def test_analyze_unstarted_lane_has_no_fabricated_trajectory(self):
@@ -853,9 +787,7 @@ class ExtendedSuiteTests(unittest.TestCase):
         large = {**degree, "node_count": 6, "correct": False}
         summary = suite.summarize([small, large, deepcopy(large)])
         exact = summary["by_task"]["degree_exact"]
-        self.assertEqual(exact["accuracy"], 1 / 3)
-        self.assertEqual(exact["macro_size_accuracy"], 1 / 2)
-        self.assertEqual(exact["macro_size_denominator"], 2)
+        self.assert_fields(exact, accuracy=1 / 3, macro_size_accuracy=1 / 2, macro_size_denominator=2)
         self.assertEqual(summary["by_task_and_size"]["degree_exact"]["5"]["accuracy"], 1)
         self.assertEqual(summary["by_task_and_size"]["degree_exact"]["6"]["accuracy"], 0)
 
@@ -864,24 +796,6 @@ class ExtendedSuiteTests(unittest.TestCase):
             self.assertTrue(suite.failure(ProviderHTTPError(code))["fatal"])
         for code in (408, 500, 502, 503, 504, 599):
             self.assertFalse(suite.failure(ProviderHTTPError(code))["fatal"])
-
-    def test_http_503_stops_instance_then_continues_without_retry(self):
-        self.plan()
-        def factory(provider, **kwargs):
-            return FakeClient(kwargs["model"], lambda request, count:
-                              ProviderHTTPError(503) if count == 2 else None)
-        result = self.run_lane(factory=factory)
-        self.assertEqual(result["models"]["jev"]["status"], "completed_with_failures")
-        attempts = self.attempts()
-        self.assertEqual(len(attempts), 5)
-        self.assertEqual(attempts[1]["http_status"], 503)
-        self.assertFalse(attempts[1]["fatal"])
-        self.assertEqual(attempts[2]["instance_id"], self.instances[1]["id"])
-        rows = self.scores()
-        self.assertEqual(rows[0]["decisions"], ["B"])
-        self.assertEqual(rows[0]["query_count"], 2)
-        self.assertFalse(rows[0]["feasible"])
-        self.assertTrue(all(row["feasible"] for row in rows[1:]))
 
     def test_stdout_and_errors_are_sanitized(self):
         output, error = io.StringIO(), io.StringIO()

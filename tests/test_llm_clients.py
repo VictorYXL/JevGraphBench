@@ -47,20 +47,47 @@ def model_info(reasoning=True):
               capabilities=NS(supports=NS(reasoning_effort=reasoning)))
 
 
+ANSWER_ONLY_CASES = [
+    ("yes", "yes"), (" NO\n", "no"), ("YeS", "yes"),
+    ("<think>no is not right</think>yes", "yes"),
+] + [(text, None) for text in (
+    None, "", "yes.", '"yes"', '{"choice":"yes"}', "yes no", "The answer is yes",
+    "```\nyes\n```", "yes\nno", "maybe", "ｙｅｓ", "<think>yes",
+    "<think>yes</think>", "<think><think>x</think>yes",
+)]
+
+
 class ChoiceProtocolTests(unittest.TestCase):
-    def test_answer_only_normalization_and_strict_boundaries(self):
-        for text, expected in (("yes", "yes"), (" NO\n", "no"), ("YeS", "yes"),
-                               ("<think>no is not right</think>yes", "yes")):
-            self.assertEqual(parse_answer_only(text, request()), expected)
-        for text in (None, "", "yes.", '"yes"', '{"choice":"yes"}', "yes no",
-                     "The answer is yes", "```\nyes\n```", "yes\nno", "maybe",
-                     "<think>yes", "<think>yes</think>", "<think><think>x</think>yes"):
-            with self.subTest(text=text), self.assertRaises(InvalidResponseError):
-                parse_answer_only(text, request())
-        custom = replace(request(), options=(DecisionOption("node_7"), DecisionOption("node_91")))
-        self.assertEqual(parse_answer_only("node_91", custom), "node_91")
-        with self.assertRaises(InvalidResponseError):
-            parse_answer_only("NODE_91", custom)
+    def test_parsers_accept_only_exact_answers_and_safe_wrappers(self):
+        json_cases = [(text, "yes") for text in (
+            ' {"choice":"yes"} ', '```json\n{"choice":"yes"}\n```',
+            '<think>{"choice":"no"}</think>\n{"choice":"yes"}',
+            '<think></think>\n```json\n{"choice":"yes"}\n```',
+        )] + [(text, None) for text in (
+            None, "", "yes", "YES", "The answer is yes.", '[]', '{"choice":"YES"}',
+            '{"choice":"maybe"}', '{"choice":true}', '{"choice":["yes"]}',
+            '{"choice":"yes","explanation":"x"}', '{"choice":"no","choice":"yes"}',
+            '{"choice":"yes"} {"choice":"no"}', '<think>{"choice":"yes"}',
+            '<think><think>x</think>{"choice":"yes"}',
+            '<think>{"choice":"yes"}</think>', '{"choice":"yes"}\nMore text',
+        )]
+        for parser, cases in ((parse_answer_only, ANSWER_ONLY_CASES), (parse_choice, json_cases)):
+            for text, expected in cases:
+                with self.subTest(parser=parser.__name__, text=text):
+                    if expected is None:
+                        with self.assertRaises(InvalidResponseError):
+                            parser(text, request())
+                    else:
+                        self.assertEqual(parser(text, request()), expected)
+            custom = replace(request(), options=(DecisionOption("node_7"), DecisionOption("node_91")))
+            for option in ("node_91", "NODE_91"):
+                text = option if parser is parse_answer_only else json.dumps({"choice": option})
+                with self.subTest(parser=parser.__name__, option=option):
+                    if option == "node_91":
+                        self.assertEqual(parser(text, custom), option)
+                    else:
+                        with self.assertRaises(InvalidResponseError):
+                            parser(text, custom)
 
     def test_prompt_has_only_model_visible_fields(self):
         content = prompt_for(request())
@@ -72,27 +99,11 @@ class ChoiceProtocolTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", content)
         self.assertNotIn("choice-v1", content)
 
-    def test_exact_final_answer_and_safe_wrappers(self):
-        for text in (' {"choice":"yes"} ', '```json\n{"choice":"yes"}\n```',
-                     '<think>{"choice":"no"}</think>\n{"choice":"yes"}',
-                     '<think></think>\n```json\n{"choice":"yes"}\n```'):
-            with self.subTest(text=text):
-                self.assertEqual(parse_choice(text, request()), "yes")
-        custom = replace(request(), options=(DecisionOption("node_7"), DecisionOption("node_91")))
-        self.assertEqual(parse_choice('{"choice":"node_91"}', custom), "node_91")
-
-    def test_malformed_ambiguous_or_truncated_answers_are_not_repaired(self):
-        for text in (None, "", "yes", "YES", "The answer is yes.", '[]', '{"choice":"YES"}',
-                     '{"choice":"maybe"}', '{"choice":true}', '{"choice":["yes"]}',
-                     '{"choice":"yes","explanation":"x"}', '{"choice":"no","choice":"yes"}',
-                     '{"choice":"yes"} {"choice":"no"}', '<think>{"choice":"yes"}',
-                     '<think><think>x</think>{"choice":"yes"}',
-                     '<think>{"choice":"yes"}</think>', '{"choice":"yes"}\nMore text'):
-            with self.subTest(text=text), self.assertRaises(InvalidResponseError):
-                parse_choice(text, request())
-
-
 class VLLMTests(unittest.IsolatedAsyncioTestCase):
+    def response_client(self, body, **kwargs):
+        return VLLMClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, content=json.dumps(body))), **kwargs)
+
     async def test_answer_only_wire_and_diagnostics(self):
         for text, code in ((" YES\n", None), ("<think></think>no", None),
                            ('{"choice":"yes"}', "invalid_choice"),
@@ -119,9 +130,8 @@ class VLLMTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(caught.exception.finish_reason, "stop")
                     self.assertEqual(caught.exception.usage.output_tokens, 12)
         for think in (True, False):
-            async with VLLMClient(output_format="answer_only", think=think,
-                                  transport=httpx.MockTransport(lambda _: httpx.Response(
-                                      200, json=completion("yes", thinking=True)))) as client:
+            async with self.response_client(completion("yes", thinking=True),
+                                            output_format="answer_only", think=think) as client:
                 if think:
                     self.assertEqual((await client.predict(request())).selected_option_id, "yes")
                 else:
@@ -195,14 +205,11 @@ class VLLMTests(unittest.IsolatedAsyncioTestCase):
         for body in (completion(thinking=True),
                      completion('<think>PRIVATE_REASONING</think>{"choice":"yes"}'),
                      completion() | {"usage": {"completion_tokens_details": {"reasoning_tokens": 1}}}):
-            async with VLLMClient(think=False, transport=httpx.MockTransport(
-                lambda _: httpx.Response(200, json=body)
-            )) as client:
+            async with self.response_client(body, think=False) as client:
                 with self.assertRaisesRegex(InvalidResponseError, "no-think"):
                     await client.predict(request())
-        async with VLLMClient(think=False, transport=httpx.MockTransport(
-            lambda _: httpx.Response(200, json=completion('<think></think>{"choice":"yes"}'))
-        )) as client:
+        async with self.response_client(
+                completion('<think></think>{"choice":"yes"}'), think=False) as client:
             self.assertEqual((await client.predict(request())).selected_option_id, "yes")
 
     async def test_http_errors_no_retry_no_redirect_no_body_leak(self):
@@ -259,9 +266,7 @@ class VLLMTests(unittest.IsolatedAsyncioTestCase):
             bodies.append(body)
         for body in bodies:
             with self.subTest(body=body):
-                async with VLLMClient(transport=httpx.MockTransport(
-                    lambda _: httpx.Response(200, content=json.dumps(body))
-                )) as client:
+                async with self.response_client(body) as client:
                     with self.assertRaises(InvalidResponseError):
                         await client.predict(request())
         async with VLLMClient(transport=httpx.MockTransport(
@@ -353,6 +358,19 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
     def client(self, **kwargs):
         return GitHubCopilotClient(**({"model": "test-gpt", "github_token": "FAKE_GITHUB_KEY"} | kwargs))
 
+    async def predict(self, **kwargs):
+        async with self.client(**kwargs) as client:
+            return await client.predict(request())
+
+    def assert_session_closed(self, aborted=False):
+        session = self.runtime.sessions[-1]
+        if aborted:
+            session.abort.assert_awaited_once()
+        else:
+            session.abort.assert_not_called()
+        session.disconnect.assert_awaited_once()
+        self.runtime.delete_session.assert_any_await(session.session_id)
+
     async def test_output_format_wire_matches_vllm_for_both_gpt_models(self):
         for output_format in (None, "json", "answer_only"):
             settings = {} if output_format is None else {"output_format": output_format}
@@ -369,70 +387,45 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(output_format=output_format, model=model):
                     self.runtime.list_models.return_value = [NS(**{**vars(model_info()), "id": model})]
                     self.runtime.answer.data.content = content
-                    async with self.client(model=model, **settings) as client:
-                        self.assertIsNone(client.think)
-                        self.assertEqual(client.output_format, output_format or "json")
-                        result = await client.predict(request())
-                    session = self.runtime.sessions[-1]
-                    opts = session.options
+                    result = await self.predict(model=model, **settings)
+                    opts = self.runtime.sessions[-1].options
                     self.assertEqual(opts["system_message"], {"mode": "replace", "content": messages[0]["content"]})
                     self.assertEqual(self.runtime.prompts[-1], messages[1]["content"])
                     self.assertEqual(opts["model"], model)
-                    self.assertIsNone(opts["reasoning_effort"])
                     self.assertEqual(opts["model_capabilities"].limits.max_output_tokens, 4096)
                     self.assertNotIn("output_format", opts)
                     self.assertNotIn("response_format", opts)
-                    self.assertEqual(opts["tools"], [])
                     self.assertEqual(result.selected_option_id, "yes")
-                    self.assertEqual(result.usage.reasoning_tokens, 14)
                     self.assertEqual(result.raw_output["content"], content)
-                    self.assertIsNone(result.probabilities)
-                    session.abort.assert_not_called()
-                    session.disconnect.assert_awaited_once()
+                    self.assert_session_closed()
 
     async def test_answer_only_parser_acceptance_rejection_and_cleanup(self):
-        cases = [("yes", "yes"), (" NO\n", "no"), ("YeS", "yes"),
-                 ("<think>no is not right</think>yes", "yes")]
-        cases.extend((text, None) for text in (
-            None, "", "yes.", '"yes"', '{"choice":"yes"}', "yes no", "The answer is yes",
-            "```\nyes\n```", "yes\nno", "maybe", "ｙｅｓ", "<think>yes",
-            "<think>yes</think>", "<think><think>x</think>yes",
-        ))
-        for text, expected in cases:
+        for text, expected in ANSWER_ONLY_CASES:
             with self.subTest(text=text):
                 self.runtime.answer.data.content = text
                 before = len(self.runtime.prompts)
-                async with self.client(output_format="answer_only") as client:
-                    if expected is None:
-                        with self.assertRaises(InvalidResponseError) as shared:
-                            parse_answer_only(text, request())
-                        with self.assertRaises(InvalidResponseError) as caught:
-                            await client.predict(request())
-                        self.assertEqual(caught.exception.diagnostic_code, shared.exception.diagnostic_code)
-                    else:
-                        self.assertEqual((await client.predict(request())).selected_option_id, expected)
-                self.assertEqual(len(self.runtime.prompts), before + 1)
-                session = self.runtime.sessions[-1]
                 if expected is None:
-                    session.abort.assert_awaited_once()
+                    with self.assertRaises(InvalidResponseError) as shared:
+                        parse_answer_only(text, request())
+                    with self.assertRaises(InvalidResponseError) as caught:
+                        await self.predict(output_format="answer_only")
+                    self.assertEqual(caught.exception.diagnostic_code, shared.exception.diagnostic_code)
                 else:
-                    session.abort.assert_not_called()
-                session.disconnect.assert_awaited_once()
-                self.runtime.delete_session.assert_any_await(session.session_id)
+                    self.assertEqual((await self.predict(output_format="answer_only")).selected_option_id, expected)
+                self.assertEqual(len(self.runtime.prompts), before + 1)
+                self.assert_session_closed(aborted=expected is None)
 
     async def test_answer_only_preserves_reasoning_controls_and_contradiction_checks(self):
         self.runtime.answer.data.content = "yes"
-        async with self.client(output_format="answer_only", think=False) as client:
-            with self.assertRaises(UnsupportedRequestError):
-                await client.predict(request())
+        with self.assertRaises(UnsupportedRequestError):
+            await self.predict(output_format="answer_only", think=False)
         self.runtime.create_session.assert_not_called()
         self.runtime.events[0].data.reasoning_effort = "high"
-        async with self.client(output_format="answer_only", think=True, reasoning_effort="high") as client:
-            self.assertEqual((await client.predict(request())).usage.reasoning_tokens, 14)
+        result = await self.predict(output_format="answer_only", think=True, reasoning_effort="high")
+        self.assertEqual(result.usage.reasoning_tokens, 14)
         self.assertEqual(self.runtime.sessions[-1].options["reasoning_effort"], "high")
-        async with self.client(output_format="answer_only", think=True, reasoning_effort="low") as client:
-            with self.assertRaisesRegex(InvalidResponseError, "different reasoning"):
-                await client.predict(request())
+        with self.assertRaisesRegex(InvalidResponseError, "different reasoning"):
+            await self.predict(output_format="answer_only", think=True, reasoning_effort="low")
 
         self.runtime.list_models.return_value = [model_info(False)]
         usage = self.runtime.events[0].data
@@ -442,13 +435,11 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
                              ("reasoning_tokens", 1), ("reasoning_effort", "low")):
             target = usage if field in ("reasoning_tokens", "reasoning_effort") else self.runtime.answer.data
             with self.subTest(field=field), patch.object(target, field, value, create=True):
-                async with self.client(output_format="answer_only", think=False) as client:
-                    with self.assertRaises(InvalidResponseError) as caught:
-                        await client.predict(request())
-                    self.assertEqual(caught.exception.diagnostic_code, "unexpected_reasoning")
+                with self.assertRaises(InvalidResponseError) as caught:
+                    await self.predict(output_format="answer_only", think=False)
+                self.assertEqual(caught.exception.diagnostic_code, "unexpected_reasoning")
         self.runtime.answer.data.content = "<think></think>no"
-        async with self.client(output_format="answer_only", think=False) as client:
-            self.assertEqual((await client.predict(request())).selected_option_id, "no")
+        self.assertEqual((await self.predict(output_format="answer_only", think=False)).selected_option_id, "no")
         self.assertIsNone(self.runtime.sessions[-1].options["reasoning_effort"])
 
     async def test_lazy_isolated_tool_free_sessions_and_normalized_result(self):
@@ -501,8 +492,7 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
             self.skipTest("Optional SDK not installed")
         from copilot import CopilotClient as SDKClient
         from copilot.session import ModelCapabilitiesOverride, ModelLimitsOverride
-        async with self.client() as client:
-            await client.predict(request())
+        await self.predict()
         inspect.signature(SDKClient).bind(**self.factory_options[0])
         opts = self.runtime.sessions[0].options.copy()
         opts["model_capabilities"] = ModelCapabilitiesOverride(limits=ModelLimitsOverride(max_output_tokens=4096))
@@ -520,60 +510,50 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
         for think, explicit, expected in ((True, None, "medium"), (None, None, None),
                                           (None, "low", "low")):
             self.runtime.events[0].data.reasoning_effort = expected
-            async with self.client(think=think, reasoning_effort=explicit) as client:
-                await client.predict(request())
+            await self.predict(think=think, reasoning_effort=explicit)
             self.assertEqual(self.runtime.sessions[-1].options["reasoning_effort"], expected)
         self.runtime.list_models.return_value = [model_info(False)]
         self.runtime.events[0].data.reasoning_effort = None
         self.runtime.events[0].data.reasoning_tokens = 0
-        async with self.client(think=False) as client:
-            await client.predict(request())
+        await self.predict(think=False)
         self.assertIsNone(self.runtime.sessions[-1].options["reasoning_effort"])
 
-    async def test_unsupported_thinking_never_sends_a_question(self):
-        for info, settings in ((model_info(), {"think": False}),
-                               (model_info(False), {"think": True}),
-                               (model_info(), {"reasoning_effort": "max"})):
-            self.runtime.list_models.return_value = [info]
-            async with self.client(**settings) as client:
-                with self.assertRaises(UnsupportedRequestError):
-                    await client.predict(request())
+    async def test_unsupported_model_thinking_or_auth_never_sends_question(self):
+        for info, settings, authenticated in (
+            (model_info(), {"think": False}, True),
+            (model_info(False), {"think": True}, True),
+            (model_info(), {"reasoning_effort": "max"}, True),
+            (model_info(), {"model": "not-available"}, True),
+            (model_info(), {}, False),
+        ):
+            with self.subTest(settings=settings, authenticated=authenticated):
+                self.runtime.list_models.return_value = [info]
+                self.runtime.get_auth_status.return_value = NS(
+                    isAuthenticated=authenticated, statusMessage="PRIVATE_AUTH")
+                with self.assertRaises(
+                        UnsupportedRequestError if authenticated else ClientTransportError) as caught:
+                    await self.predict(**settings)
+                self.assertNotIn("PRIVATE", str(caught.exception))
         self.runtime.create_session.assert_not_called()
         self.assertEqual(self.runtime.prompts, [])
-
-    async def test_model_and_auth_rejected_before_question(self):
-        async with self.client(model="not-available") as client:
-            with self.assertRaises(UnsupportedRequestError):
-                await client.predict(request())
-        self.runtime.get_auth_status.return_value = NS(isAuthenticated=False, statusMessage="PRIVATE_AUTH")
-        async with self.client() as client:
-            with self.assertRaises(ClientTransportError) as caught:
-                await client.predict(request())
-            self.assertNotIn("PRIVATE", str(caught.exception))
-        self.runtime.create_session.assert_not_called()
 
     async def test_timeout_cancellation_and_sdk_failure_abort_and_clean_up(self):
         for error, expected in ((TimeoutError("PRIVATE"), ClientTimeoutError),
                                 (RuntimeError("PRIVATE_SDK"), ClientTransportError),
                                 (asyncio.CancelledError(), asyncio.CancelledError)):
             self.runtime.error = error
-            async with self.client() as client:
-                with self.assertRaises(expected) as caught:
-                    await client.predict(request())
-                self.assertNotIn("PRIVATE", str(caught.exception))
-            session = self.runtime.sessions[-1]
-            session.abort.assert_awaited_once()
-            session.disconnect.assert_awaited_once()
-            self.runtime.delete_session.assert_any_await(session.session_id)
+            with self.assertRaises(expected) as caught:
+                await self.predict()
+            self.assertNotIn("PRIVATE", str(caught.exception))
+            self.assert_session_closed(aborted=True)
         self.assertEqual(len(self.runtime.prompts), 3)
 
     async def test_wall_clock_timeout_during_send(self):
         async def hanging(*args, **kwargs):
             await asyncio.Future()
         with patch.object(FakeSession, "send_and_wait", new=hanging):
-            async with self.client(timeout_seconds=0.01) as client:
-                with self.assertRaises(ClientTimeoutError):
-                    await client.predict(request())
+            with self.assertRaises(ClientTimeoutError):
+                await self.predict(timeout_seconds=0.01)
         self.runtime.sessions[-1].abort.assert_awaited_once()
 
     async def test_external_and_repeated_cancellation_still_cleans_session(self):
@@ -599,24 +579,19 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
                 finish_cleanup.set()
                 with self.assertRaises(asyncio.CancelledError):
                     await task
-                session.abort.assert_awaited_once()
-                session.disconnect.assert_awaited_once()
-                self.runtime.delete_session.assert_any_await(session.session_id)
+                self.assert_session_closed(aborted=True)
 
     async def test_reported_model_effort_or_no_think_contradictions_are_rejected(self):
         usage = self.runtime.events[0].data
         usage.model = "different-model"
-        async with self.client() as client:
-            with self.assertRaisesRegex(InvalidResponseError, "inconsistent"):
-                await client.predict(request())
+        with self.assertRaisesRegex(InvalidResponseError, "inconsistent"):
+            await self.predict()
         usage.model = "resolved-gpt"
-        async with self.client(think=True, reasoning_effort="high") as client:
-            with self.assertRaisesRegex(InvalidResponseError, "different reasoning"):
-                await client.predict(request())
+        with self.assertRaisesRegex(InvalidResponseError, "different reasoning"):
+            await self.predict(think=True, reasoning_effort="high")
         self.runtime.list_models.return_value = [model_info(False)]
-        async with self.client(think=False) as client:
-            with self.assertRaisesRegex(InvalidResponseError, "no-think"):
-                await client.predict(request())
+        with self.assertRaisesRegex(InvalidResponseError, "no-think"):
+            await self.predict(think=False)
 
     async def test_initialization_failure_is_sanitized_and_resources_closed(self):
         self.runtime.start.side_effect = RuntimeError("PRIVATE_START_FAILURE")
@@ -628,49 +603,30 @@ class CopilotTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(directory.exists())
         self.runtime.stop.assert_awaited_once()
 
-    async def test_invalid_final_outputs_no_repair_or_retry(self):
-        for content in ("", 'yes', '{"choice":"not-an-option"}', '<think>{"choice":"yes"}'):
-            self.runtime.answer.data.content = content
-            async with self.client() as client:
-                with self.assertRaises(InvalidResponseError):
-                    await client.predict(request())
-        self.assertEqual(len(self.runtime.prompts), 4)
-
-    async def test_sdk_internal_retry_or_multiple_usage_events_are_rejected(self):
+    async def test_invalid_outputs_metadata_and_sdk_retries_fail_without_repair(self):
         usage = self.runtime.events[0]
-        for events in ([usage, usage], [usage, NS(type="assistant.turn_retry", data=NS())]):
-            self.runtime.events = events
-            async with self.client() as client:
+        cases = [(self.runtime.answer.data, "content", content) for content in
+                 ("", "yes", '{"choice":"not-an-option"}', '<think>{"choice":"yes"}')]
+        cases += [(self.runtime, "events", events) for events in
+                  ([usage, usage], [usage, NS(type="assistant.turn_retry", data=NS())])]
+        cases += [(usage.data, key, value) for key, value in (
+            ("finish_reason", "length"), ("input_tokens", True),
+            ("reasoning_tokens", -1), ("content_filter_triggered", True))]
+        cases += [(self.runtime.answer.data, "tool_requests", [{}]), (self.runtime, "answer", None)]
+        for target, field, value in cases:
+            with self.subTest(field=field, value=value), patch.object(target, field, value, create=True):
+                before = len(self.runtime.prompts)
                 with self.assertRaises(InvalidResponseError):
-                    await client.predict(request())
-        self.assertEqual(len(self.runtime.prompts), 2)
+                    await self.predict()
+                self.assertEqual(len(self.runtime.prompts), before + 1)
+                self.assert_session_closed(aborted=True)
 
     async def test_missing_usage_is_unknown_not_invented(self):
         self.runtime.events = []
-        async with self.client() as client:
-            result = await client.predict(request())
+        result = await self.predict()
         self.assertEqual(result.resolved_model, "resolved-gpt")
         self.assertIsNone(result.usage.input_tokens)
         self.assertIsNone(result.usage.reasoning_tokens)
-
-    async def test_malformed_metadata_is_rejected(self):
-        usage = self.runtime.events[0].data
-        for key, value in (("finish_reason", "length"), ("input_tokens", True),
-                           ("reasoning_tokens", -1), ("content_filter_triggered", True)):
-            previous = getattr(usage, key, None)
-            setattr(usage, key, value)
-            async with self.client() as client:
-                with self.assertRaises(InvalidResponseError):
-                    await client.predict(request())
-            setattr(usage, key, previous)
-        self.runtime.answer.data.tool_requests = [{}]
-        async with self.client() as client:
-            with self.assertRaises(InvalidResponseError):
-                await client.predict(request())
-        self.runtime.answer = None
-        async with self.client() as client:
-            with self.assertRaises(InvalidResponseError):
-                await client.predict(request())
 
     async def test_close_unused_and_protocol_validation_are_side_effect_free(self):
         client = self.client()

@@ -7,10 +7,6 @@ GraphDecide evaluates decision-oriented models through public-instance
 optimization and controlled graph-reasoning diagnostics. The repository URL
 and Python package retain the existing JevGraphBench name.
 
-**[Paper: GraphDecide (v25, PDF)](assets/paper/GraphDecide_no_code_v25.pdf)**
-— 8 main-text pages, with public-instance results and the action-abstraction
-diagnostic in Appendix H (pages 25–29).
-
 | Evaluation panel | Tasks and scale | Model configurations | Scheduled evaluations |
 | --- | --- | --- | --- |
 | **Public optimization** | 7 TSPLIB instances, 100–225 cities; 10 signed MaxCut graphs, 125 vertices | Jev + four Qwen3.5 models | **255 trajectories**: 17 graphs × 3 conditions × 5 models |
