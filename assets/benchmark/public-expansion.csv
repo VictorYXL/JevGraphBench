@@ -1,0 +1,11 @@
+model,task,scheduled,completed,unsupported,gap_percent_feasible,status
+Decider-2B v11,tsp_public,21,21,0,728.4415284837421,complete
+Decider-2B v11,maxcut_public,30,30,0,100.2272620197976,complete
+Kev-4B,tsp_public,21,15,6,348.586643580644,partially_supported
+Kev-4B,maxcut_public,30,30,0,100.2272620197976,complete
+Laya,tsp_public,21,0,21,,unsupported
+Laya,maxcut_public,30,0,30,,unsupported
+Qwen3.5-27B,tsp_public,21,21,0,45.12695369363867,complete
+Qwen3.5-27B,maxcut_public,30,30,0,102.86956607578918,complete
+Qwen2.5-72B-Instruct,tsp_public,21,21,0,119.55783438182829,complete
+Qwen2.5-72B-Instruct,maxcut_public,30,30,0,104.56558109586908,complete

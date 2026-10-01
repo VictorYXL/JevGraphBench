@@ -3,21 +3,27 @@
 ### Benchmarking Decision Models on Graphs
 
 **Fast decisions are useful only if they produce good graph solutions.**
-GraphDecide evaluates decision-oriented models through public-instance
-optimization and controlled graph-reasoning diagnostics. The repository URL
+GraphDecide evaluates **graph understanding, sequential graph decisions,
+and the contributions of graph and text information**. It combines controlled
+diagnostics, public optimization instances and matched node-classification
+inputs. The repository URL
 and Python package retain the existing JevGraphBench name.
 
 | Evaluation panel | Tasks and scale | Model configurations | Scheduled evaluations |
 | --- | --- | --- | --- |
-| **Public optimization** | 7 TSPLIB instances, 100–225 cities; 10 signed MaxCut graphs, 125 vertices | Jev + four Qwen3.5 models | **255 trajectories**: 17 graphs × 3 conditions × 5 models |
+| **Public optimization** | 7 TSPLIB instances, 100–225 cities; 10 signed MaxCut graphs, 125 vertices | Jev, native alternatives and six Qwen configurations | **510 scheduled trajectories**: 453 complete, 57 native-input exclusions |
+| **Public reasoning references** | Same 17 public graphs, one condition each | GPT-5.4 / GPT-6-Astra, separate budgets | **34 trajectories**: 11 complete, 23 incomplete |
+| **Graph and text** | ogbn-arxiv, 40 classes, 200 common test targets × 5 conditions | 9 supported models; Laya unsupported | **9,000 test decisions**, plus 540 validation calls |
 | **Action abstraction** | Same 7 TSPLIB instances; frozen four-rule pool | Jev + Qwen3.5-4B / 9B | **126 new trajectories**, plus 63 reused direct-action trajectories |
 | **Controlled diagnostics** | 6 graph queries + 4 constructions, 8–12 vertices | 10 direct-decision + 2 reasoning references | **11,520 episodes** on 960 shared cases per configuration |
 
-**Public results: September 29, 2026.** The controlled diagnostic snapshot
-remains September 27, 2026. Repeated conditions and queries are not independent
-graphs, and the two panels are not a controlled size-scaling experiment.
+**Latest results: October 1, 2026.** The primary public and controlled
+diagnostic snapshots remain September 29 and September 27, respectively.
+Repeated conditions and queries are not independent graphs; these panels
+are not a controlled size-scaling experiment.
 
 [Public optimization](#public-instance-optimization) ·
+[Graph and text](#graph-and-text-contributions) ·
 [Action abstraction](#action-abstraction-results) ·
 [Evaluation pipeline](#what-the-benchmark-measures) · [Key findings](#key-findings) · [Exact decisions](#exact-decisions) ·
 [Sequential construction](#sequential-construction) ·
@@ -31,14 +37,14 @@ graphs, and the two panels are not a controlled size-scaling experiment.
 > **A taskwise comparison, not a universal leaderboard.** Higher accuracy and
 > lower objective gaps are better. Public percentage gaps and diagnostic
 > additive gaps are different metrics; neither is combined into one overall
-> score. GPT results shown below belong to the small-graph diagnostic panel,
-> use different reasoning budgets, and are not compute-matched baselines.
+> score. GPT references have panel-specific coverage and separate reasoning
+> budgets; they are not compute-matched baselines.
 
 ## Public-instance optimization
 
 Every method receives the complete graph representation and follows its own
 decisions. TSP exposes all unvisited cities, not a heuristic shortlist; MaxCut
-assigns every vertex to one of two sides. All five models complete **51/51**
+assigns every vertex to one of two sides. All five primary models complete **51/51**
 conditions: **21 TSP tours and 30 signed cuts**.
 
 - **TSPLIB:** `kroA100`, `kroA150`, `kroB100`, `kroB200`, `kroC100`,
@@ -111,6 +117,87 @@ retained audit findings, not normalized probabilities or substituted actions.
 [All 255 episode metrics](assets/benchmark/public-episodes.csv) ·
 [Verification and source identities](assets/benchmark/public-results.json) ·
 [Pinned dataset catalog](assets/benchmark/public-catalog.json)
+
+### Native and larger-model expansion
+
+Five additional configurations use the same full graphs and three conditions.
+All **255** scheduled episodes have terminal outcomes: **198 complete** and
+**57 unsupported** before a model forward, with no other request failures.
+
+| Model | TSP gap (%) | Completed | MaxCut gap (%) | Completed |
+| --- | ---: | ---: | ---: | ---: |
+| Decider-2B v11 | 728.44 | 21/21 | 100.23 | 30/30 |
+| Kev-4B | 348.59 | 15/21 | 100.23 | 30/30 |
+| Laya | Unsupported | 0/21 | Unsupported | 0/30 |
+| Qwen3.5-27B | 45.13 | 21/21 | 102.87 | 30/30 |
+| Qwen2.5-72B-Instruct | 119.56 | 21/21 | 104.57 | 30/30 |
+
+Qwen3.5-27B improves on Jev's full-panel TSP gap of 66.01%, but still
+trails nearest neighbor's 27.65%. Larger parameter count alone does not
+explain the ordering across these different checkpoints. All expansion
+MaxCut gaps remain well above the classical references.
+
+**Kev's tour gap is conditional on five supported graphs**, excluding all
+conditions of `kroB200` and `tsp225` at its 8,192-token limit. Do not rank it
+directly against seven-graph means. Laya exceeds its native option limit on
+tours and its context limit on cuts. No inputs were cropped to force support,
+and unsupported inputs are not zero-quality solutions.
+
+[Expansion summary CSV](assets/benchmark/public-expansion.csv) ·
+[Latest result provenance](assets/benchmark/latest-results.json)
+
+## Graph and text contributions
+
+This panel classifies **200 uniformly sampled official ogbn-arxiv test nodes**
+among 40 subjects, with 12 separate validation targets. Every supported model
+receives the same targets and five input conditions.
+
+All arms share labels for up to four adjacent training nodes and four
+training non-neighbors, selected independently of labels. Anonymous IDs do
+not disclose neighbor roles; target/test labels are never model inputs.
+
+| Arm | Information supplied in addition to the common training-label anchors |
+| --- | --- |
+| **T** | Target title and abstract |
+| **G** | Induced directed relations, without free text |
+| **TG** | Target/context text and relations |
+| **BAG** | Exactly the TG text and context, without explicit edges |
+| **A** | None: anchors only |
+
+**T is not graph-free:** all arms inherit graph-informed context selection.
+`TG − T` adds context text as well as edges; `TG − BAG` isolates explicit
+edges conditional on the fixed context. This is a sampled input comparison,
+not a full-dataset supervised OGB leaderboard.
+
+**Test accuracy (%)**, with 200 completed decisions per cell:
+
+| Model | T | G | TG | BAG | A |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Jev | 54.5 | 59.0 | 57.5 | 54.5 | 47.5 |
+| Decider-2B v11 | 31.5 | 44.0 | 39.0 | 35.0 | 26.5 |
+| Kev-4B | 28.5 | 58.0 | 28.0 | 25.5 | 37.0 |
+| Qwen3.5-4B | 22.0 | 56.0 | 29.5 | 21.0 | 41.5 |
+| Qwen3.5-9B | 31.0 | 54.0 | 42.0 | 38.5 | 40.0 |
+| Qwen3.5-27B | 48.0 | 58.0 | 56.0 | 53.0 | 45.5 |
+| Qwen2.5-72B-Instruct | 53.5 | 56.5 | 59.0 | 56.5 | 43.0 |
+| GPT-5.4 — separate reasoning budget | 74.0 | 58.5 | 75.5 | 74.0 | 49.0 |
+| GPT-6-Astra — separate reasoning budget | 74.5 | 59.5 | 77.5 | 77.0 | 51.0 |
+
+All nine models complete **1,060/1,060** calls, including validation.
+Laya's 12-option limit excludes the unchanged 40-class task; its result is
+**unsupported**, not zero accuracy.
+
+**Combining inputs does not uniformly help.** Jev's matched edge gain
+`TG − BAG` is **+3.0 percentage points**, with a paired 95% interval of
+**[−1.0, +7.0]**. Decider and Qwen3.5-4B have positive intervals,
+**+4.0 [1.5, 7.0]** and **+8.5 [4.5, 13.0]**, respectively. These are
+unadjusted descriptive intervals from 1,000 paired-target bootstrap samples.
+Shared contexts and the single underlying citation graph limit independence
+and generalization. Hardware and generation budgets also differ.
+
+[Accuracy, fixed-40-class macro-F1 and coverage](assets/benchmark/graph-text.csv) ·
+[Paired gains and intervals](assets/benchmark/graph-text-paired.csv) ·
+[Protocol and source-summary hashes](assets/benchmark/latest-results.json)
 
 ## Action-abstraction results
 
@@ -195,10 +282,12 @@ GraphDecide separates three questions:
 1. **Correct answers:** controlled graph queries have independently checked truth.
 2. **End-to-end quality:** public constructions use published references;
    gap and completion coverage are reported separately.
-3. **Diagnostic explanation:** on the small synthetic graphs only, exact
-   continuation analysis measures the best
-   solution still reachable after each recorded action. A later locally optimal
-   decision cannot undo an earlier irreversible loss.
+3. **Graph–text utility:** matched node-classification inputs compare target
+   text, relations, combined information and controls under common label anchors.
+
+Exact continuation analysis is a supplementary small-graph diagnostic:
+it measures the best solution still reachable after each recorded action.
+A later locally optimal decision cannot undo an earlier irreversible loss.
 
 ## Key findings
 
@@ -365,6 +454,19 @@ direct-decision ranking. Both use tool-free default reasoning with a
 GPT-5.4's nine construction timeouts are retained. Its zero gaps describe
 completed solutions, **not** success on every scheduled episode.
 
+On the **separate public panel**, each GPT model receives one condition on
+each of the 17 full graphs, with the same 4,096-token/180-second budget:
+
+| Model | TSP complete | TSP gap (%) | MaxCut complete | MaxCut gap (%) |
+| --- | ---: | ---: | ---: | ---: |
+| GPT-5.4 | 0/7 | Undefined | 0/10 | Undefined |
+| GPT-6-Astra | 7/7 | 2.16 | 4/10 | 5.91 |
+
+The Astra cut gap is conditional on four completed graphs, not ten-graph
+coverage. Undefined means no completed solutions, not zero gap. These
+single-condition results must not be pooled with the three-condition
+direct-decision panel.
+
 ## Evaluation protocol
 
 - **Public panel:** complete original instances, all legal actions, three
@@ -386,6 +488,10 @@ completed solutions, **not** success on every scheduled episode.
   Decider-2B uses the v11 checkpoint.
 - **Failure accounting:** unsupported inputs, timeouts and invalid outputs
   remain in scheduled denominators. No silent retries or answer repair.
+- **Semantic inputs:** frozen official targets, common training-only anchors,
+  label-independent mixed context, and the same 40 classes in every arm.
+  Report paired effects and fixed-40-class macro-F1 alongside accuracy;
+  graph-informed context selection is not a graph-free treatment.
 - **Scope:** these are point estimates on an inspected bank, not proof of
   large-graph generalization, architecture superiority or matched-hardware
   speed. Only the original four configurations have the separate 952-instance
@@ -448,8 +554,9 @@ e00fac08430afb1d11ec21a58ede8bd0537a0e2bf874022ad5d7f5f2409f8616
 ## Run the benchmark
 
 The results above are a fixed experimental snapshot, not a live service.
-This checkout retains the runnable core; historical all-model orchestration
-and paper-production tools remain outside it. The Python distribution name
+This checkout retains the runnable core; machine-specific all-model
+orchestration and remote-deployment tools are archived locally, not installed
+as part of the package. The Python distribution name
 is still `jevgraphbench`.
 
 <details>
@@ -464,13 +571,14 @@ is still `jevgraphbench`.
 | [src/datasets/](src/datasets/) | Real-network download, parsing and verification |
 | [configs/](configs/) | YAML configuration templates |
 | [data/real/](data/real/) | Dataset metadata; downloaded archives are ignored |
-| [scripts/](scripts/) | Four runtime/audit utilities, described below |
+| [scripts/](scripts/) | Six core runtime, reporting and audit utilities, described below |
 | [tests/](tests/) | Core regression tests only |
 | `output/`, `results/` | Ignored local artifacts; never required merely to import the core |
 
-Paper sources, PDFs, the website, historical experiments, publication scripts
-and their tests remain in ignored local `output/`. Only the compact result
-figures, result CSVs, pinned public-source catalog and replayable example used by this README are included
+One-off experiment schedulers, native-runtime deployment adapters and their
+deployment tests remain in ignored local archives. Only compact result
+figures, aggregate CSVs, source hashes, the pinned public-source catalog and
+the replayable example used by this README are included
 under [assets/benchmark/](assets/benchmark/).
 No weights, credentials or raw provider ledgers are distributed here.
 
@@ -568,9 +676,10 @@ The retained scripts are:
 - [audit_task_shortcuts.py](scripts/audit_task_shortcuts.py): offline label and
   simple-feature audits used by the structural task tests.
 
-Historical twelve-configuration orchestration and publication tools are
-archived, not part of this minimal CLI. The core suite does not claim to
-reproduce every historical model lane from a single command.
+Historical all-model orchestration, graph–text evaluation and remote machine
+management are archived, not part of this minimal CLI. Their verified
+aggregate results are included, but the core suite does not claim to reproduce
+every historical model lane or panel from a single command.
 
 ### Public optimization instances
 
@@ -680,7 +789,7 @@ The retained tests use offline fixtures and mocked providers:
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-No credentials, model servers, paper builders, browser tooling or archived
+No credentials, model servers, browser tooling or archived
 experiment outputs are required for these core tests.
 
 </details>

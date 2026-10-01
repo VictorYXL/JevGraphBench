@@ -1,0 +1,44 @@
+{
+  "snapshot": "2026-10-01",
+  "public_expansion": {
+    "scheduled": 255,
+    "completed": 198,
+    "unsupported": 57,
+    "gap_aggregation": "Mean conditions within each graph, then mean supported graphs by task.",
+    "kev_tsp_support": "Five graphs /15 conditions; kroB200 and tsp225 exceed the native context limit.",
+    "cut_reference": "Historical source-reported best-known values, not proven optima or current records."
+  },
+  "graph_text": {
+    "dataset": "ogbn-arxiv",
+    "classes": 40,
+    "test_targets": 200,
+    "validation_targets": 12,
+    "supported_models": 9,
+    "test_calls": 9000,
+    "validation_calls": 540,
+    "scientific_failures": 0,
+    "native_unsupported": "Laya: 40 choices exceed the native limit of 12.",
+    "science_manifest_sha256": "d089465ed62fbfa93340464f998cea94a89bfc9d1c3bd49c093446d7daba1b34",
+    "arms": {
+      "T": "Target text and shared graph-informed training-label anchors.",
+      "G": "Directed relations and the same anchors, without free text.",
+      "TG": "Target/context text, relations and the same anchors.",
+      "BAG": "Identical TG text and anchors, omitting explicit edges.",
+      "A": "Shared anchors alone."
+    },
+    "macro_f1": "Fixed 40 classes, including zero contribution for absent classes.",
+    "intervals": "1000 paired-target bootstrap samples; seed 20261001; unadjusted percentile 95% intervals.",
+    "limits": "One sampled graph; shared contexts induce dependence. T is not graph-free. TG-T also adds context text; TG-BAG isolates explicit edges conditional on context.",
+    "runtime": "Mixed hardware and distinct generation budgets, not a matched-compute or latency ranking."
+  },
+  "source_summary_sha256": {
+    "public_expansion": "d18028b04bf94475047177b4415ba664862c687d99ae1085f4305227ba6d7a5c",
+    "graph_text": "5e5e684e647cea0f0dd5f7cd2ee4caeb717dd68b6c01ad43fa35a73a1c46a57e"
+  },
+  "csv_sha256": {
+    "public-expansion.csv": "ebd3ab1208d88a9674963dd9f989299e533b6224f5d1a6def69ab70f03d1ba9c",
+    "graph-text.csv": "82bbdffe65dd61a5fb2c5967d5c6ce36995d2d18e86c50ee443cc84563745c64",
+    "graph-text-paired.csv": "0284bd123b6c600fb800f4f4d41fb24213e7dcc15b9691e02ecb2a7e865a7e64"
+  },
+  "contents": "Aggregate results only; no model weights, article text, credentials or raw provider ledgers."
+}

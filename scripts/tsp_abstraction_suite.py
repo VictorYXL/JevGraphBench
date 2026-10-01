@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections import Counter, defaultdict
+from collections import Counter
 from copy import deepcopy
 import csv
 from dataclasses import asdict
-import hashlib
-import importlib.util
 import json
 import math
 import os
