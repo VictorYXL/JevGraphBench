@@ -136,7 +136,7 @@ class PublicTaskTests(unittest.TestCase):
         self.assertEqual(dict(tasks.next_request(record, []).state["current_city_distances"])[1], 28)
 
     def test_available_official_tsp225_tour_preserves_3916_reference(self):
-        data = REPO / "output/public-graph-data-20260929-v1"
+        data = REPO / "output/experiments/public/primary/public-graph-data-20260929-v1"
         record_path = data / "task-instances/tsp225.json"
         tour_path = data / "raw/tsp225.opt.tour"
         if not record_path.is_file() or not tour_path.is_file():

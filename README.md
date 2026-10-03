@@ -15,9 +15,10 @@ and Python package retain the existing JevGraphBench name.
 | **Public reasoning references** | Same 17 public graphs, one condition each | GPT-5.4 / GPT-6-Astra, separate budgets | **34 trajectories**: 11 complete, 23 incomplete |
 | **Graph and text** | ogbn-arxiv, 40 classes, 200 common test targets × 5 conditions | 9 supported models; Laya unsupported | **9,000 test decisions**, plus 540 validation calls |
 | **Action abstraction** | Same 7 TSPLIB instances; frozen four-rule pool | Jev + Qwen3.5-4B / 9B | **126 new trajectories**, plus 63 reused direct-action trajectories |
+| **Four-task proposals** | 160 construction cases + 51 public conditions, each in A/B/C | 14 configurations | **8,862 primary slots** + **1,098 separate supplement slots** |
 | **Controlled diagnostics** | 6 graph queries + 4 constructions, 8–12 vertices | 10 direct-decision + 2 reasoning references | **11,520 episodes** on 960 shared cases per configuration |
 
-**Latest results: October 1, 2026.** The primary public and controlled
+**Historical panels: results updated October 1, 2026.** The primary public and controlled
 diagnostic snapshots remain September 29 and September 27, respectively.
 Repeated conditions and queries are not independent graphs; these panels
 are not a controlled size-scaling experiment.
@@ -25,6 +26,7 @@ are not a controlled size-scaling experiment.
 [Public optimization](#public-instance-optimization) ·
 [Graph and text](#graph-and-text-contributions) ·
 [Action abstraction](#action-abstraction-results) ·
+[Four-task proposals](#four-task-proposal-extension-methods-and-release-scope) ·
 [Evaluation pipeline](#what-the-benchmark-measures) · [Key findings](#key-findings) · [Exact decisions](#exact-decisions) ·
 [Sequential construction](#sequential-construction) ·
 [Trajectory diagnosis](#when-does-optimality-become-unreachable) ·
@@ -265,6 +267,217 @@ wall time includes replay, so a clean solve-only speedup over A is not claimed.
 [Per-graph paired contrasts](assets/benchmark/abstraction-paired-deltas.csv) ·
 [All 252 baseline records](assets/benchmark/abstraction-baselines.csv) ·
 [Provenance and interpretation](assets/benchmark/abstraction-results.json)
+
+### Four-task proposal extension: methods and release scope
+
+The historical TSP-only panel above is unchanged. The separate extension
+schedules 14 configurations × 633 primary episodes = **8,862 episode slots**:
+160 original small-graph construction cases (40 each for MaxCut, Manhattan
+TSP, deterministic normalized LT influence and binary modularity), plus
+51 public graph/condition cases, in each of A/B/C. These are inspected
+original cases, not a fresh-graph replication.
+
+All A episodes use fresh inference. A retains the original legal actions;
+B exposes deduplicated anonymous fixed-rule proposals and numeric features;
+C adds rule definitions and mappings, with the same proposals, features and
+order at matched histories. Each arm follows its own subsequent history.
+Fixed-next-vertex MaxCut and modularity retain their two legal partition
+actions. Singleton proposals are forced transitions, not model calls.
+The 2,110 control trajectories cover fixed rules, five-seed uniform-candidate
+selection and classical references. No failed action is retried or repaired.
+
+Separate zero-attempt supplements cover 455 Qwen3.5-2B, 6 Qwen3.5-4B grammar
+168 Qwen3.5-27B grammar and 469 Qwen3.8-27B slots. They exclude previously attempted,
+partially executed and completed episodes and **never replace primary
+outcomes or change primary denominators**. Terminal failures and unsupported
+inputs are not successful completions; missing objectives are not zero gaps.
+
+<!-- proposal-results:start -->
+### Verified proposal results
+
+The separate extension contains **7,039/8,862 complete primary episodes** and **1,823 noncomplete primary episodes**, with 2,110 independently replayed controls. All scheduled outcomes remain in the denominator.
+
+| Model | Separate zero-attempt supplement completed / scheduled |
+| --- | ---: |
+| `qwen2` | 455/455 |
+| `qwen4_grammar` | 6/6 |
+| `qwen27_grammar` | 168/168 |
+| `qwen38_27b_bf16` | 469/469 |
+
+Supplement episodes never replace or merge into primary results. Gaps are conditional on feasible completions; public percentage-point gaps and synthetic additive gaps must not be pooled. Graph-macro means average conditions within graphs first; random-control seeds are averaged before conditions. Paired contrasts use only matched feasible episodes, not differences of marginal means.
+
+**Primary taskwise results; no pooled ranking.** Each A/B/C cell shows the conditional graph-macro gap followed by complete/scheduled coverage. Lower gaps are better; a negative C-minus-B delta favors C. Matched coverage is paired conditions / scheduled conditions, followed by the number of represented graphs. `n/a` means no eligible completion or pair, never a zero gap.
+
+<details>
+<summary><strong>Synthetic MaxCut - gaps and deltas in cut edges</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 9.025 (40/40) | 0.600 (40/40) | 0.150 (40/40) | -0.450 | 40/40; 40 graphs |
+| `qwen4_grammar` | 11.125 (40/40) | 3.525 (40/40) | 0.575 (40/40) | -2.950 | 40/40; 40 graphs |
+| `qwen9_grammar` | 8.625 (40/40) | 0.500 (40/40) | 0.625 (40/40) | 0.125 | 40/40; 40 graphs |
+| `qwen27_grammar` | 14.808 (26/40) | 1.697 (33/40) | 1.733 (30/40) | 0.115 | 26/40; 26 graphs |
+| `qwen4_token_scores` | 7.325 (40/40) | 1.250 (40/40) | 0.925 (40/40) | -0.325 | 40/40; 40 graphs |
+| `decider` | 11.125 (40/40) | 3.525 (40/40) | 2.475 (40/40) | -1.050 | 40/40; 40 graphs |
+| `kev` | 11.125 (40/40) | 2.475 (40/40) | 1.875 (40/40) | -0.600 | 40/40; 40 graphs |
+| `laya` | 15.250 (40/40) | 10.075 (40/40) | n/a (0/40) | n/a | 0/40; 0 graphs |
+| `qwen38_27b_bf16` | 11.429 (7/40) | 3.250 (8/40) | 3.727 (11/40) | 2.500 | 2/40; 2 graphs |
+| `qwen25_72b_bf16` | 9.925 (40/40) | 0.550 (40/40) | 0.325 (40/40) | -0.225 | 40/40; 40 graphs |
+| `qwen08` | 11.125 (40/40) | 2.750 (40/40) | 2.700 (40/40) | -0.050 | 40/40; 40 graphs |
+| `qwen2` | 11.000 (9/40) | 3.444 (9/40) | 4.000 (12/40) | 0.667 | 3/40; 3 graphs |
+| `gpt54_default_reasoning` | 0.028 (36/40) | 0.000 (36/40) | 0.000 (34/40) | 0.000 | 34/40; 34 graphs |
+| `gpt6astra_default_reasoning` | 0.000 (40/40) | 0.000 (40/40) | 0.025 (40/40) | 0.025 | 40/40; 40 graphs |
+
+</details>
+
+<details>
+<summary><strong>Synthetic Manhattan TSP - gaps and deltas in distance units</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 141.900 (40/40) | 8.200 (40/40) | 6.650 (40/40) | -1.550 | 40/40; 40 graphs |
+| `qwen4_grammar` | 329.200 (40/40) | 41.300 (40/40) | 18.632 (38/40) | -24.316 | 38/40; 38 graphs |
+| `qwen9_grammar` | 351.800 (40/40) | 12.050 (40/40) | 18.900 (40/40) | 6.850 | 40/40; 40 graphs |
+| `qwen27_grammar` | 256.966 (29/40) | 19.103 (29/40) | 16.966 (29/40) | 1.524 | 21/40; 21 graphs |
+| `qwen4_token_scores` | 353.250 (40/40) | 17.750 (40/40) | 16.250 (40/40) | -1.500 | 40/40; 40 graphs |
+| `decider` | 328.900 (40/40) | 16.150 (40/40) | 9.500 (40/40) | -6.650 | 40/40; 40 graphs |
+| `kev` | 328.250 (40/40) | 31.850 (40/40) | 24.600 (40/40) | -7.250 | 40/40; 40 graphs |
+| `laya` | 338.600 (40/40) | 14.850 (40/40) | 32.077 (26/40) | 20.462 | 26/40; 26 graphs |
+| `qwen38_27b_bf16` | 227.333 (9/40) | 19.333 (9/40) | 8.727 (11/40) | 4.000 | 4/40; 4 graphs |
+| `qwen25_72b_bf16` | 217.200 (40/40) | 11.850 (40/40) | 7.650 (40/40) | -4.200 | 40/40; 40 graphs |
+| `qwen08` | 345.450 (40/40) | 15.600 (40/40) | 15.800 (40/40) | 0.200 | 40/40; 40 graphs |
+| `qwen2` | 300.600 (10/40) | 7.000 (10/40) | 8.167 (12/40) | 2.500 | 4/40; 4 graphs |
+| `gpt54_default_reasoning` | 0.057 (35/40) | 3.421 (38/40) | 4.450 (40/40) | 0.632 | 38/40; 38 graphs |
+| `gpt6astra_default_reasoning` | 0.050 (40/40) | 3.900 (40/40) | 3.500 (40/40) | -0.400 | 40/40; 40 graphs |
+
+</details>
+
+<details>
+<summary><strong>Synthetic deterministic LT - gaps and deltas in active vertices</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 0.450 (40/40) | 0.225 (40/40) | 0.200 (40/40) | -0.025 | 40/40; 40 graphs |
+| `qwen4_grammar` | 4.275 (40/40) | 0.538 (39/40) | 0.375 (40/40) | -0.179 | 39/40; 39 graphs |
+| `qwen9_grammar` | 4.600 (40/40) | 0.575 (40/40) | 0.350 (40/40) | -0.225 | 40/40; 40 graphs |
+| `qwen27_grammar` | 1.741 (27/40) | 0.419 (31/40) | 0.393 (28/40) | -0.130 | 23/40; 23 graphs |
+| `qwen4_token_scores` | 4.300 (40/40) | 0.575 (40/40) | 0.270 (37/40) | -0.297 | 37/40; 37 graphs |
+| `decider` | 5.125 (40/40) | 0.450 (40/40) | 0.450 (40/40) | 0.000 | 40/40; 40 graphs |
+| `kev` | 5.275 (40/40) | 0.300 (40/40) | 0.325 (40/40) | 0.025 | 40/40; 40 graphs |
+| `laya` | 4.128 (39/40) | 0.400 (20/40) | 0.000 (4/40) | 0.000 | 4/40; 4 graphs |
+| `qwen38_27b_bf16` | 1.250 (8/40) | 0.667 (12/40) | 0.333 (6/40) | n/a | 0/40; 0 graphs |
+| `qwen25_72b_bf16` | 1.625 (40/40) | 0.275 (40/40) | 0.300 (40/40) | 0.025 | 40/40; 40 graphs |
+| `qwen08` | 4.000 (40/40) | 0.700 (40/40) | 0.625 (40/40) | -0.075 | 40/40; 40 graphs |
+| `qwen2` | 4.333 (9/40) | 0.667 (12/40) | 0.143 (7/40) | n/a | 0/40; 0 graphs |
+| `gpt54_default_reasoning` | 0.000 (40/40) | 0.000 (40/40) | 0.000 (40/40) | 0.000 | 40/40; 40 graphs |
+| `gpt6astra_default_reasoning` | 0.000 (40/40) | 0.000 (40/40) | 0.000 (40/40) | 0.000 | 40/40; 40 graphs |
+
+</details>
+
+<details>
+<summary><strong>Synthetic binary modularity - gaps and deltas in modularity units</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 0.268 (40/40) | 0.025 (40/40) | 0.019 (40/40) | -0.006 | 40/40; 40 graphs |
+| `qwen4_grammar` | 0.304 (40/40) | 0.190 (38/40) | 0.032 (40/40) | -0.158 | 38/40; 38 graphs |
+| `qwen9_grammar` | 0.281 (40/40) | 0.055 (40/40) | 0.025 (40/40) | -0.030 | 40/40; 40 graphs |
+| `qwen27_grammar` | 0.274 (30/40) | 0.034 (32/40) | 0.087 (30/40) | 0.055 | 25/40; 25 graphs |
+| `qwen4_token_scores` | 0.281 (40/40) | 0.060 (40/40) | 0.064 (40/40) | 0.004 | 40/40; 40 graphs |
+| `decider` | 0.296 (40/40) | 0.122 (40/40) | 0.060 (40/40) | -0.062 | 40/40; 40 graphs |
+| `kev` | 0.281 (40/40) | 0.032 (40/40) | 0.023 (40/40) | -0.009 | 40/40; 40 graphs |
+| `laya` | 0.285 (40/40) | 0.176 (40/40) | n/a (0/40) | n/a | 0/40; 0 graphs |
+| `qwen38_27b_bf16` | 0.323 (10/40) | 0.087 (19/40) | 0.057 (13/40) | -0.061 | 5/40; 5 graphs |
+| `qwen25_72b_bf16` | 0.192 (40/40) | 0.022 (40/40) | 0.025 (40/40) | 0.004 | 40/40; 40 graphs |
+| `qwen08` | 0.281 (40/40) | 0.209 (40/40) | 0.200 (40/40) | -0.009 | 40/40; 40 graphs |
+| `qwen2` | 0.296 (11/40) | 0.074 (20/40) | 0.129 (14/40) | 0.099 | 5/40; 5 graphs |
+| `gpt54_default_reasoning` | 0.000 (32/40) | 0.001 (38/40) | 0.001 (38/40) | 0.000 | 36/40; 36 graphs |
+| `gpt6astra_default_reasoning` | 0.000 (40/40) | 0.001 (40/40) | 0.001 (40/40) | 0.001 | 40/40; 40 graphs |
+
+</details>
+
+<details>
+<summary><strong>Public TSP - gaps and deltas in percentage points</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 64.448 (21/21) | 30.015 (21/21) | 27.933 (21/21) | -2.082 | 21/21; 7 graphs |
+| `qwen4_grammar` | 306.694 (21/21) | 44.561 (21/21) | 35.891 (20/21) | -8.486 | 20/21; 7 graphs |
+| `qwen9_grammar` | 363.332 (21/21) | 39.398 (21/21) | 24.282 (21/21) | -15.116 | 21/21; 7 graphs |
+| `qwen27_grammar` | 208.467 (14/21) | 30.731 (17/21) | 34.960 (15/21) | 6.321 | 12/21; 7 graphs |
+| `qwen4_token_scores` | n/a (0/21) | n/a (0/21) | n/a (0/21) | n/a | 0/21; 0 graphs |
+| `decider` | 722.844 (21/21) | 41.604 (21/21) | 45.827 (21/21) | 4.223 | 21/21; 7 graphs |
+| `kev` | 481.488 (15/21) | 44.362 (21/21) | 37.589 (21/21) | -6.773 | 21/21; 7 graphs |
+| `laya` | n/a (0/21) | n/a (0/21) | n/a (0/21) | n/a | 0/21; 0 graphs |
+| `qwen38_27b_bf16` | 57.250 (5/21) | 36.418 (6/21) | 26.496 (4/21) | -13.025 | 2/21; 2 graphs |
+| `qwen25_72b_bf16` | 91.773 (10/21) | 42.015 (21/21) | 28.234 (20/21) | -13.542 | 20/21; 7 graphs |
+| `qwen08` | 760.968 (21/21) | 45.749 (21/21) | 38.197 (21/21) | -7.552 | 21/21; 7 graphs |
+| `qwen2` | 746.214 (5/21) | 46.787 (7/21) | 47.980 (4/21) | 1.871 | 3/21; 3 graphs |
+| `gpt54_default_reasoning` | n/a (0/21) | n/a (0/21) | n/a (0/21) | n/a | 0/21; 0 graphs |
+| `gpt6astra_default_reasoning` | 1.519 (8/21) | 7.097 (21/21) | 6.163 (20/21) | -0.911 | 20/21; 7 graphs |
+
+</details>
+
+<details>
+<summary><strong>Public signed MaxCut - gaps and deltas in percentage points</strong></summary>
+
+| Model | A gap (complete/scheduled) | B gap (complete/scheduled) | C gap (complete/scheduled) | C-minus-B | Matched conditions; graphs |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `jev_action` | 104.492 (30/30) | 11.570 (30/30) | 10.231 (30/30) | -1.339 | 30/30; 10 graphs |
+| `qwen4_grammar` | 99.806 (27/30) | 86.356 (29/30) | 17.411 (30/30) | -68.884 | 29/30; 10 graphs |
+| `qwen9_grammar` | 100.629 (30/30) | 31.438 (30/30) | 20.444 (30/30) | -10.994 | 30/30; 10 graphs |
+| `qwen27_grammar` | 102.102 (19/30) | 30.522 (19/30) | 32.544 (23/30) | -2.683 | 14/30; 9 graphs |
+| `qwen4_token_scores` | n/a (0/30) | n/a (0/30) | n/a (0/30) | n/a | 0/30; 0 graphs |
+| `decider` | 100.227 (30/30) | 40.910 (30/30) | 29.020 (30/30) | -11.889 | 30/30; 10 graphs |
+| `kev` | 100.227 (30/30) | 35.025 (30/30) | 28.495 (30/30) | -6.530 | 30/30; 10 graphs |
+| `laya` | n/a (0/30) | n/a (0/30) | n/a (0/30) | n/a | 0/30; 0 graphs |
+| `qwen38_27b_bf16` | 101.793 (6/30) | 40.825 (5/30) | 25.951 (11/30) | -7.256 | 2/30; 2 graphs |
+| `qwen25_72b_bf16` | 104.829 (30/30) | 20.901 (30/30) | 13.318 (30/30) | -7.583 | 30/30; 10 graphs |
+| `qwen08` | 100.819 (30/30) | 85.279 (30/30) | 70.474 (30/30) | -14.805 | 30/30; 10 graphs |
+| `qwen2` | 101.792 (7/30) | 60.000 (5/30) | 55.512 (11/30) | -7.094 | 2/30; 2 graphs |
+| `gpt54_default_reasoning` | n/a (0/30) | n/a (0/30) | n/a (0/30) | n/a | 0/30; 0 graphs |
+| `gpt6astra_default_reasoning` | n/a (0/30) | 10.599 (29/30) | 10.666 (30/30) | -0.052 | 29/30; 10 graphs |
+
+</details>
+
+[Primary summary](assets/benchmark/proposal-summary.csv) · [Primary episodes](assets/benchmark/proposal-episodes.csv) · [Controls](assets/benchmark/proposal-controls.csv) · [Control summary](assets/benchmark/proposal-control-summary.csv) · [Paired contrasts](assets/benchmark/proposal-paired.csv) · [Supplement summary](assets/benchmark/proposal-supplement-summary.csv) · [Supplement episodes](assets/benchmark/proposal-supplement-episodes.csv) · [Export provenance](assets/benchmark/proposal-results.json)
+<!-- proposal-results:end -->
+
+The offline [proposal exporter](src/utils/proposal_export.py) consumes supplied
+hash-bound independent replay, summary, primary/control and supplemental
+reports. It checks row identities, coverage, graph-macro gaps and paired
+contrasts; a partial display summary is rejected. It creates separate `proposal-*.csv` and
+`proposal-results.json` files, leaving historical `abstraction-*` assets
+unchanged. It exports allowlisted metrics, not requests, responses,
+credentials, endpoint configurations, private paths or free-text errors.
+Full allowlisted terminal diagnostics and explicit unknown-call/forward
+accounting are retained; unrecognized diagnostic values are rejected.
+
+```bash
+python -m src.utils.proposal_export \
+  --summary /path/to/verified/replay/summary.json \
+  --summary-sha256 VERIFIED_SUMMARY_SHA256 \
+  --replay /path/to/verified/replay/independent-replay.json \
+  --replay-sha256 VERIFIED_REPLAY_SHA256 \
+  --report /path/to/verified/report.json \
+  --controls /path/to/verified/baselines.json \
+  --supplement qwen2 supplement /path/to/verified/replay/qwen2-supplement-report.json \
+  --supplement qwen4_grammar qwen4_supplement /path/to/verified/replay/qwen4-supplement-report.json \
+  --supplement qwen27_grammar qwen27_supplement /path/to/verified/replay/qwen27-supplement-report.json \
+  --supplement qwen38_27b_bf16 qwen38_supplement /path/to/verified/replay/qwen38-supplement-report.json \
+  --output assets/benchmark --readme README.md
+```
+
+This command makes no model calls and does not itself certify raw trajectories.
+Supply trusted summary and replay SHA-256 digests from the independent verifier;
+the replay receipt binds the primary, control and supplemental reports.
+`--supplement` takes a model identifier, its summary key and its replayed report.
+The utility does not hardcode production model counts, protocol seals, machine
+paths or manuscript publication policy. The release coordinator separately
+requires the full final publication gate before invoking it for this extension.
+`--readme` replaces only the marked extension-results block after validation.
+Identical exports are idempotent; differing existing proposal assets are rejected
+rather than overwritten.
 
 ## What the benchmark measures
 
@@ -559,6 +772,36 @@ orchestration and remote-deployment tools are archived locally, not installed
 as part of the package. The Python distribution name
 is still `jevgraphbench`.
 
+### Reproduction scope and available artifacts
+
+Use the commands below to generate new benchmark inputs, run configured models
+and analyze their recorded decisions. A fresh run requires the corresponding
+datasets, model checkpoints or provider access, and explicit inference settings;
+the published result tables are not substitutes for those inputs.
+
+- **Included in this checkout:** task definitions and scoring code, supported
+  client adapters, configuration examples, regression tests, and the compact
+  results and provenance files in [assets/benchmark/](assets/benchmark/).
+- **Generated by your own runs:** requests, responses, configurations, source
+  snapshots and scores. Retain them together to support offline validation.
+  The synthetic suite's `report` and `analyze` commands below check the recorded
+  trajectories without making new model calls.
+- **Not distributed with this checkout:** historical raw provider ledgers,
+  machine-specific deployment environments, model weights, and local manuscript
+  sources or build tools. The ignored `output/` and `results/` directories are
+  not downloaded when cloning the repository. Paths to historical local
+  artifacts are therefore not public reproduction instructions.
+
+Recomputing a figure from an included aggregate CSV, replaying a recorded
+trajectory, and rerunning model inference are different operations. Only the
+last produces a new experimental observation. Manuscript compilation is
+separate from all three; it does not reproduce an experiment.
+
+Operational commands and artifact requirements are documented here rather than
+in the paper. Instructions that depend on a separately supplied artifact bundle
+must identify that requirement; no paper-build or full historical-replay
+command is implied to work from a fresh clone.
+
 <details>
 <summary><strong>Installation, configuration, repository layout and offline tests</strong></summary>
 
@@ -570,11 +813,15 @@ is still `jevgraphbench`.
 | [src/benchmark/](src/benchmark/) | Public-data preparation, task generation/scoring, small-graph trajectory analysis and experiment runners |
 | [src/clients/](src/clients/) | Jev, vLLM and optional GitHub Copilot clients |
 | [src/datasets/](src/datasets/) | Real-network download, parsing and verification |
-| [src/utils/](src/utils/) | Six importable runtime, reporting and audit utilities, described below |
+| [src/utils/](src/utils/) | Importable runtime, reporting and audit utilities, described below |
 | [configs/](configs/) | YAML configuration templates |
 | [data/](data/) | Dataset README and manifest; downloaded archives in `data/raw/` are ignored |
 | [tests/](tests/) | Core regression tests only |
 | `output/`, `results/` | Ignored local artifacts; never required merely to import the core |
+
+Local outputs are grouped by purpose (`experiments/`, `models/`, `records/`,
+`research/`, and `runtime/`). After relocating archived runs, consult the local
+output index and migration map instead of rewriting hash-bound run manifests.
 
 One-off experiment schedulers, native-runtime deployment adapters and their
 deployment tests remain in ignored local archives. Only compact result
@@ -674,6 +921,10 @@ The retained utility modules are:
   supplementary candidate-city and rule-group comparisons.
 - [tsp_abstraction_report.py](src/utils/tsp_abstraction_report.py): offline
   supplementary tables, including failures, paired coverage and timing.
+- [graph_abstraction_suite.py](src/utils/graph_abstraction_suite.py): supplied-input
+  four-task proposal freezing, live evaluation and offline trajectory replay.
+- [proposal_export.py](src/utils/proposal_export.py): validated, portable metrics
+  from separately supplied independent-replay artifacts.
 - [paired_graph_ablation.py](src/utils/paired_graph_ablation.py): shared model
   configuration, preflight, locking and integrity utilities required by the suite.
 - [audit_task_shortcuts.py](src/utils/audit_task_shortcuts.py): offline label and
@@ -683,7 +934,7 @@ Prefer `python -m src.utils.<module>` from the checkout or installed package.
 Direct paths such as `python src/utils/extended_graph_suite.py --help` also
 work, including when invoked by absolute path from another working directory.
 New source snapshots include `run_benchmark.py` and the complete `src/`
-packages, including all six utilities and package markers. For example:
+packages, including suite utilities and package markers. For example:
 
 ```bash
 python output/smoke-plan/frozen-source/src/utils/extended_graph_suite.py \
@@ -701,6 +952,58 @@ Historical all-model orchestration, graph–text evaluation and remote machine
 management are archived, not part of this minimal CLI. Their verified
 aggregate results are included, but the core suite does not claim to reproduce
 every historical model lane or panel from a single command.
+
+### Supplied-input proposal experiments
+
+The [four-task proposal runner](src/utils/graph_abstraction_suite.py) supports
+new experiments on explicitly supplied records. This mode is labeled
+`user_supplied_not_historical_replication`: it **does not reproduce the paper's
+historical cohort**. Without `--instances`, freezing requires the original
+local archives, which are not included in a fresh checkout.
+
+Supply a nonempty JSON list containing supported construction records and/or
+public TSP/MaxCut records, including their full offline scoring references.
+Construction records must satisfy
+[extended task validation](src/benchmark/extended_tasks.py); public records
+must satisfy [public task validation](src/benchmark/public_tasks.py). Instance
+IDs must be unique, safe directory names. The model JSON must map exactly the
+selected panel IDs to [ModelConfig](src/benchmark/config.py) dictionaries or
+pinned plugin specifications. Use environment variables for credentials.
+The runner freezes the records, source and explicit model specifications;
+none may be changed underneath an existing run.
+
+For example, after supplying the two JSON files:
+
+```bash
+mkdir -p output/proposal-smoke
+python -m unittest discover -s tests -p 'test_graph_abstraction*.py' \
+  > output/proposal-smoke/tests.log 2>&1
+python -m src.utils.graph_abstraction_suite freeze \
+  --root output/proposal-smoke --instances /path/to/records.json \
+  --model-config /path/to/models.json --models qwen08
+
+# This command makes live model calls; use the frozen entrypoint:
+python output/proposal-smoke/frozen-source/src/utils/graph_abstraction_suite.py \
+  run --root output/proposal-smoke \
+  --model-config /path/to/models.json --models qwen08 --concurrency 1
+
+# Offline replay; no model calls or plugin implementation required:
+python output/proposal-smoke/frozen-source/src/utils/graph_abstraction_suite.py \
+  report --root output/proposal-smoke
+```
+
+Freezing requires the successful unittest log shown above. Select supported
+panel identifiers with `--models`; inspect `--help` for the available IDs.
+Native/scoring plugins require a separately supplied, SHA-256-pinned client
+factory, explicit capability limits and any appropriately licensed dependencies.
+The plugin contract is documented in the runner and frozen protocol; weights,
+tokenizers and third-party scoring implementations are not bundled. A client
+file hash alone does not establish dependency provenance or model equivalence.
+
+`report` checks recorded artifacts and replays completed ledgers, while retaining
+incomplete and unattempted outcomes. Its summary alone is **not a publication
+gate**. Historical evidence must use its original matching frozen entrypoint,
+not the current runner or a regenerated input cohort.
 
 ### Public optimization instances
 

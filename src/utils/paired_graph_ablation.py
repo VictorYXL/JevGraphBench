@@ -43,8 +43,8 @@ from src.datasets import load_graph
 from src.datasets.sources import DEFAULT_DATA_DIR
 
 SEED = 20260925
-DEFAULT_ROOT = REPO / "output/paired-graph-dev-20260923-v4-seven-models"
-DEFAULT_PRIOR = REPO / "output/adjacency.jev/graphs.jsonl"
+DEFAULT_ROOT = REPO / "output/experiments/historical/development/paired-graph-dev-20260923-v4-seven-models"
+DEFAULT_PRIOR = REPO / "output/experiments/historical/adjacency/adjacency.jev/graphs.jsonl"
 DATASETS = ("facebook", "ca-grqc", "power", "human-ppi")
 LEGACY_MODELS = ("jev", "qwen08", "qwen2", "qwen4", "qwen9")
 MODELS = (*LEGACY_MODELS, "gpt54", "gpt6astra")
