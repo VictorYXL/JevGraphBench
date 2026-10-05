@@ -133,8 +133,10 @@ class ModelConfig:
             raise ValueError("timeout_seconds must be finite and positive")
         if self.think is not None and type(self.think) is not bool:
             raise ValueError("model.think must be bool or null")
-        if self.output_format is not None and self.output_format not in ("json", "answer_only"):
-            raise ValueError("model.output_format must be json or answer_only")
+        formats = ("json", "answer_only", "function_call") if self.provider == "github_copilot" else (
+            "json", "answer_only")
+        if self.output_format is not None and self.output_format not in formats:
+            raise ValueError(f"model.output_format must be one of {formats}")
         if self.constrain_choices is not None and type(self.constrain_choices) is not bool:
             raise ValueError("model.constrain_choices must be bool or null")
         if self.constrain_choices is True and (
@@ -152,10 +154,12 @@ class ModelConfig:
                 or not math.isfinite(self.presence_penalty) or not -2 <= self.presence_penalty <= 2):
             raise ValueError("model.presence_penalty must be finite and in [-2, 2]")
         if self.reasoning_effort is not None:
-            if self.reasoning_effort not in ("low", "medium", "high", "xhigh", "max"):
+            if self.reasoning_effort not in ("none", "low", "medium", "high", "xhigh", "max"):
                 raise ValueError("Unsupported model.reasoning_effort")
-            if self.think is False:
+            if self.think is False and self.reasoning_effort != "none":
                 raise ValueError("model.reasoning_effort conflicts with think=false")
+            if self.think is True and self.reasoning_effort == "none":
+                raise ValueError("model.reasoning_effort=none conflicts with think=true")
         for name, value, upper in (("temperature", self.temperature, 2), ("top_p", self.top_p, 1)):
             if value is not None and (type(value) not in (int, float) or not math.isfinite(value)
                                       or not 0 <= value <= upper or (name == "top_p" and value == 0)):

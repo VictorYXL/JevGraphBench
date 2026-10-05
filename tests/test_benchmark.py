@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
@@ -27,6 +27,7 @@ from src.clients.base import (
     BaseDecisionClient, ClientCapabilities, DecisionResponse, ProviderHTTPError, TokenUsage,
 )
 from src.clients.typesafe import TypeSafeClient
+from src.clients.registry import create_client
 from src.datasets import GraphDataset, LoadStats, get_source
 
 
@@ -58,6 +59,37 @@ def path_loader():
 
 
 class ConfigTests(unittest.TestCase):
+    def test_copilot_explicit_no_think_config_roundtrip_and_conflicts(self):
+        for settings in ({"think": False}, {"reasoning_effort": "none"},
+                         {"think": False, "reasoning_effort": "none"}):
+            config = ModelConfig("github_copilot", "gpt-5.4", 600,
+                                 output_format="function_call", **settings)
+            self.assertEqual(ModelConfig(**asdict(config)), config)
+            client = create_client(config.provider, **config.client_kwargs())
+            self.assertEqual(client.think, config.think)
+            self.assertEqual(client.reasoning_effort, config.reasoning_effort)
+            self.assertEqual(client.timeout_seconds, 600)
+            self.assertEqual(client.max_tokens, 4096)
+        for settings in ({"think": True, "reasoning_effort": "none"},
+                         {"think": False, "reasoning_effort": "low"}):
+            with self.assertRaises(ValueError):
+                ModelConfig("github_copilot", "gpt-5.4", 600, **settings)
+        with self.assertRaises(ValueError):
+            ModelConfig("vllm", "gpt-5.4", 600, reasoning_effort="none")
+
+    def test_function_call_is_opt_in_copilot_only_and_serialized(self):
+        config = ModelConfig("github_copilot", "gpt-5.4", 180, output_format="function_call")
+        client = create_client(config.provider, **config.client_kwargs())
+        self.assertEqual(client.output_format, "function_call")
+        self.assertIsNone(client.think)
+        self.assertIsNone(client.reasoning_effort)
+        self.assertEqual(client.max_tokens, 4096)
+        self.assertEqual(client.timeout_seconds, 180)
+        self.assertEqual(asdict(config)["output_format"], "function_call")
+        for provider in ("vllm", "typesafe"):
+            with self.assertRaises(ValueError):
+                ModelConfig(provider, "test", 180, output_format="function_call")
+
     def test_single_task_templates_preserve_shared_sampling_and_budgets(self):
         adjacency = load_config(TEMPLATE.with_name("adjacency.yaml"))
         distance = load_config(TEMPLATE.with_name("distance_threshold.yaml"))
