@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use GraphDecide, please cite the manuscript below and identify the version or commit used."
+type: software
+title: GraphDecide
+version: v33
+authors:
+  - family-names: Yang
+    given-names: Xianliang
+  - family-names: Zhang
+    given-names: Yapu
+  - family-names: Zhao
+    given-names: Li
+repository-code: "https://github.com/VictorYXL/JevGraphBench"
+url: "https://github.com/VictorYXL/JevGraphBench"
+preferred-citation:
+  type: unpublished
+  title: "GraphDecide: Benchmarking System One Models on Graph Tasks"
+  authors:
+    - family-names: Yang
+      given-names: Xianliang
+    - family-names: Zhang
+      given-names: Yapu
+    - family-names: Zhao
+      given-names: Li
+  year: 2026
+  version: v33
+  notes: "Manuscript, version 33."
+  url: "https://github.com/VictorYXL/JevGraphBench"
