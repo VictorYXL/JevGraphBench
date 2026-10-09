@@ -1,0 +1,9 @@
+# Check/render committed primary aggregates, not raw response replay.
+# The check action runs the renderer; CLI --check only previews this action.
+# Results has no root and forbids --output.
+schema_version: 1
+workflow: results
+default_action: check
+actions:
+  check: {}
+  render: {}

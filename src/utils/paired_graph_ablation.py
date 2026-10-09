@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Offline paired development plan and explicitly invoked, fail-closed live lanes.
 
-This is deliberately separate from the benchmark CLI. No command downloads data,
-starts services, resumes jobs, or reads credential files. See the root README.
+This direct CLI is a compatibility interface for a separate paired workflow;
+it is not a configured public workflow. Use run_benchmark.py --config YAML for
+the supported public workflows. No command here downloads data, starts services,
+resumes jobs, or reads credential files.
 """
 
 from __future__ import annotations
@@ -43,8 +45,8 @@ from src.datasets import load_graph
 from src.datasets.sources import DEFAULT_DATA_DIR
 
 SEED = 20260925
-DEFAULT_ROOT = REPO / "output/experiments/historical/development/paired-graph-dev-20260923-v4-seven-models"
-DEFAULT_PRIOR = REPO / "output/experiments/historical/adjacency/adjacency.jev/graphs.jsonl"
+DEFAULT_ROOT = REPO / "output/experiments/development/paired-graph"
+DEFAULT_PRIOR = REPO / "output/reference-inputs/paired-graph/adjacency/graphs.jsonl"
 DATASETS = ("facebook", "ca-grqc", "power", "human-ppi")
 LEGACY_MODELS = ("jev", "qwen08", "qwen2", "qwen4", "qwen9")
 MODELS = (*LEGACY_MODELS, "gpt54", "gpt6astra")
@@ -478,7 +480,7 @@ def lane_locks(models):
     descriptors = []
     try:
         for model in sorted(models):
-            path = Path(tempfile.gettempdir()) / f"jevgraphbench-paired-{os.getuid()}-{model}.lock"
+            path = Path(tempfile.gettempdir()) / f"graphdecisionbench-paired-{os.getuid()}-{model}.lock"
             fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             descriptors.append(fd)
             try:

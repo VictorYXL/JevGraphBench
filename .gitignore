@@ -13,7 +13,7 @@ __pycache__/
 build/
 dist/
 output/
-results/
+/results/
 assets/paper/
 data/raw/
 *.log

@@ -1,5 +1,7 @@
 # Paths are relative to this config, NOT the shell working directory.
-# Running this configuration directly evaluates Jev and may incur API charges.
+# Legacy two-task smoke evaluation, not the primary six-task cohort.
+# Running requires --allow-inference, evaluates Jev and may incur API charges.
+# The loader is offline: acquire and verify source archives separately.
 schema_version: 1
 
 run:

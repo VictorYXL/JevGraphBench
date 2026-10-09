@@ -1,0 +1,16 @@
+# Supplementary label-blind Prime pool, NOT the primary gold-containing pool.
+# Shared root with graph_text_arxiv.yaml: freeze both datasets once, not twice.
+# Freeze needs non-portable historical inputs and --allow-downloads, even cached.
+# Approval is a placeholder for genuine lane-specific, hash-bound authorization.
+schema_version: 1
+workflow: graph_text
+root: ../output/config-examples/graph-text
+default_action: verify
+actions:
+  freeze: {}
+  verify: {}
+  report: {}
+  run:
+    model: qwen2
+    dataset: prime
+    approval: ../output/config-inputs/graph-text-approval.json

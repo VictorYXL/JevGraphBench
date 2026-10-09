@@ -16,7 +16,8 @@ Persist a successful unittest log at DIR/tests.log before freezing. Run the
 frozen-source copy after freezing. All supplied model configurations are bound.
 
 Without --instances, freeze reproduces the historical 211-case cohort and
-requires the original local input/ledger archives; it is not a clean-clone mode.
+requires authentic input/ledger archives under output/reference-inputs/proposals/;
+these semantic locations are placeholders, not a clean-clone mode.
 Explicit inputs are marked user-supplied, never historical-paper replication.
 Scoring/native plugins are user-owned, SHA-256-pinned BaseDecisionClient
 factories with explicit capability limits. No SemIf/upstream implementation,
@@ -90,18 +91,14 @@ PANEL = (
     "gpt54_default_reasoning", "gpt6astra_default_reasoning",
     "qwen38_27b_bf16", "qwen25_72b_bf16", "qwen08", "qwen2",
 )
-SYNTHETIC = Path("output/experiments/synthetic/development/"
-                 "paper-structural-challenge-20260924-v1/instances.jsonl")
-MAIN_SCORES = Path("output/experiments/synthetic/matrix/explicit-actions-matrix-20260924-v1/"
-                   "structural_challenge.jev_action/scores.jsonl")
-ORIGINAL_PUBLIC = Path("output/archive/portable/graphbench-portable-release-20260924-v2/"
-                       "public/structural_challenge.jsonl")
-ORIGINAL_REFERENCES = Path("output/archive/portable/graphbench-portable-release-20260924-v2/"
-                           "references/structural_challenge.jsonl")
-PUBLIC = Path("output/experiments/public/primary/public-graph-main-20260929-v2/instances.json")
-MATRIX = Path("output/experiments/synthetic/matrix/"
-              "twelve-model-publication-20260927-v2/benchmark.json")
-VERSION = "graph-proposals-20261003-v2"
+REFERENCE_INPUTS = Path("output/reference-inputs/proposals")
+SYNTHETIC = REFERENCE_INPUTS / "synthetic/instances.jsonl"
+MAIN_SCORES = REFERENCE_INPUTS / "main-ledger/scores.jsonl"
+ORIGINAL_PUBLIC = REFERENCE_INPUTS / "portable/public/structural_challenge.jsonl"
+ORIGINAL_REFERENCES = REFERENCE_INPUTS / "portable/references/structural_challenge.jsonl"
+PUBLIC = REFERENCE_INPUTS / "public/instances.json"
+MATRIX = REFERENCE_INPUTS / "panel/benchmark.json"
+VERSION = "graph-proposals-raw-capture"
 RAW_RESPONSE_VERSION = 1
 CAPTURE_ERRORS = ("non_json_response", "invalid_response_type", "credential_material")
 SECRET_FIELDS = frozenset({
@@ -347,8 +344,8 @@ def score(instance, decisions):
 
 
 def source_hashes():
-    paths = [*(REPO / "src").rglob("*.py"), REPO / "tests/test_graph_abstraction_suite.py",
-             REPO / "tests/test_graph_abstraction.py", REPO / "tests/test_tsp_abstraction.py"]
+    paths = [*(REPO / "src").rglob("*.py"), REPO / "tests/integration/test_graph_abstraction_suite.py",
+             REPO / "tests/unit/test_graph_abstraction.py", REPO / "tests/integration/test_tsp_abstraction.py"]
     return {str(p.relative_to(REPO)): digest(p) for p in sorted(paths)
             if p != REPO / "src/utils/proposal_scoring_client.py"}
 
@@ -512,9 +509,9 @@ def freeze(root, *, instances_path=None, config_path=None, models=None):
                        "Euclidean-unrounded supported explicitly, not substituted. Public TSP uses EUC_2D."),
         "fresh_run": ("Fresh user-supplied cohort, not a replication of the paper cohort."
                       if instances_path is not None else
-                      "All model episodes, including A, are fresh. No v1 episodes or scores reused. "
-                      "v1 remains a quarantined confirmatory-bank pilot. Pre-raw-capture v2 episodes "
-                      "are also quarantined and never reused or retrofitted."),
+                      "All model episodes, including A, are fresh. Confirmatory-bank pilot episodes "
+                      "and scores remain quarantined. Pre-raw-capture episodes are also quarantined "
+                      "and never reused or retrofitted."),
         "failures": "No retries. Durable call intent before transport. On resume seal started episodes "
                     "as interrupted, never repeat a call. Untouched episodes may start. Fatal errors stop lane.",
         "support": "Unsupported capacities are separate terminal outcomes, not zero performance; "
@@ -646,7 +643,7 @@ def validate_lane_config(name, spec):
             require(config.model == dict(zip(("decider", "kev", "laya"), NATIVE_MODELS))[name] and
                     isinstance(config.adapter_kwargs.get("audit_path"), str) and
                     Path(config.adapter_kwargs["audit_path"]).is_absolute(),
-                    "Native v2 lanes require a pinned audited adapter and absolute audit_path.")
+                    "Native raw-capture lanes require a pinned audited adapter and absolute audit_path.")
     elif name.startswith("qwen"):
         require(config.provider == "vllm" and config.think is False and
                 config.constrain_choices is True and config.output_format == "answer_only" and
@@ -1380,7 +1377,7 @@ async def run(root, config_path, models, concurrency):
     report(root)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("freeze", "run", "report", "monitor"))
     parser.add_argument("--root", type=Path, required=True)
@@ -1389,7 +1386,7 @@ def main():
     parser.add_argument("--models", nargs="+", choices=PANEL)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--interval", type=int, default=60)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         require(args.instances is None or args.command == "freeze", "--instances is only valid for freeze.")
         if args.command == "freeze":

@@ -1,5 +1,6 @@
-# Single-task evaluation. Shared sampling settings match comprehensive.yaml.
-# Running this configuration makes live Jev calls and may incur charges.
+# Legacy adjacency-only smoke evaluation, not the primary six-task cohort.
+# Running requires --allow-inference, makes live Jev calls and may incur charges.
+# Paths are YAML-relative; the loader never downloads source data implicitly.
 schema_version: 1
 
 run:

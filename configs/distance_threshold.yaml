@@ -1,6 +1,7 @@
 # Single-task evaluation. Thresholds are difficulty levels of the same task.
-# Shared sampling settings match comprehensive.yaml; no additional perturbations.
-# Running this configuration makes live Jev calls and may incur charges.
+# Legacy distance-only smoke evaluation, not the primary six-task cohort.
+# Running requires --allow-inference, makes live Jev calls and may incur charges.
+# Paths are YAML-relative; the loader never downloads source data implicitly.
 schema_version: 1
 
 run:

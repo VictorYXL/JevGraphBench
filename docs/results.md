@@ -1,6 +1,8 @@
-# Complete v33 result tables
+# Complete GraphDecisionBench result tables
 
-Manuscript-transcribed display values; not fresh experiments. Sources: Appendix C (RQ1), Table 1 (RQ2), Appendix E (RQ3). [Source data](../assets/benchmark/v33/display-data.json) · [Overview](../README.md).
+Manuscript-transcribed display values; not fresh experiments. Sources: Appendix C (RQ1), Table 2 (RQ2), Appendix E (RQ3). [Source data](../data/results/summary.json) · [Overview](../README.md).
+
+Primary aggregate results cover fourteen model-interface configurations across RQ1/RQ2/RQ3, with unsupported interfaces explicitly marked. Per-query and per-trajectory outputs are not distributed. Charts and tables render from the summary, not raw response replay.
 
 GPT-5.4 uses explicit no reasoning. GPT-6-Astra uses observed medium reasoning and is not a compute-matched baseline. Fixed model order is not an overall ranking.
 
@@ -154,7 +156,9 @@ Lower is better. Means use completed trajectories; partial subsets are not ranke
 ## Reading the results
 
 - RQ1/2 invalid outputs count as wrong. RQ3 incomplete/unsupported trajectories remain in coverage, without an imputed objective.
-- GPT-5.4 results are final selections after invalid-only retries, not single-attempt claims. [Retry accounting](../assets/benchmark/v33/gpt54/retry_summary.csv) is separate.
+- RQ2 paired pointwise intervals cannot be recovered from aggregate correct counts. Aggregate accuracy also does not reconstruct macro-F1.
+- Forced singleton actions require no model call; completion alone does not establish improvement over the proposal rules.
 - RQ3: TSP/LT use exact optima; signed MaxCut uses historical BKS; modularity uses numerical MILP certificates. Non-GPT modularity objectives were rounded to four decimals before rebasing; printed extra gap digits do not imply extra measurement precision.
+- Primary TSP, MaxCut and LT relative gaps are $|f_i-R_i|/R_i\times100$ (%) with positive references. No completed primary solution improves on its reference; the absolute form therefore agrees with the recorded directional shortfall. Modularity uses $Q_i^*-Q_i$ in absolute Q units and retains signed residuals.
 - Compare paired modes only on jointly completed graphs. Their paired difference cannot generally be reconstructed by subtracting means with unequal coverage.
 - [Reproduction and model settings](reproduction.md).

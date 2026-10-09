@@ -1,0 +1,20 @@
+# Portable supplied-input freeze; never selects the archived-input fallback.
+# Supply valid instances and the backend JSON model map (not schema-1 YAML).
+# Before freezing, persist a genuine successful unittest log as root/tests.log.
+# Paths below are placeholders; no inputs, logs or approvals are fabricated.
+schema_version: 1
+workflow: proposals
+root: ../output/config-examples/proposals
+default_action: report
+actions:
+  freeze:
+    instances: ../output/config-inputs/proposal-instances.json
+    model_config: ../output/config-inputs/proposal-models.json
+    models: [qwen2]
+  run:
+    model_config: ../output/config-inputs/proposal-models.json
+    models: [qwen2]
+    concurrency: 1
+  report: {}
+  monitor:
+    interval: 60

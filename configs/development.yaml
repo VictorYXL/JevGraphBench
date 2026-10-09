@@ -1,0 +1,19 @@
+# Offline synthetic development, not the primary real-network cohort.
+# structural_dev plans all ten tasks: six structural and four optimization.
+# Run plan before report; actions never chain automatically.
+schema_version: 1
+workflow: development
+root: ../output/config-examples/development
+default_action: plan
+actions:
+  plan:
+    design: structural_dev
+    seed: 20260926
+    node_counts: [8]
+    samples_per_size: 1
+    no_think_max_tokens: 64
+    models: [jev]
+  run:
+    models: [jev]
+  report: {}
+  analyze: {}

@@ -377,7 +377,7 @@ class GitHubCopilotClient(BaseDecisionClient):
             return
         client_type, capabilities_type, limits_type, deny_type = _sdk_types()
         if self._runtime is None:
-            self._directory = TemporaryDirectory(prefix="jevgraphbench-copilot-")
+            self._directory = TemporaryDirectory(prefix="graphdecisionbench-copilot-")
             self._limits = capabilities_type(limits=limits_type(max_output_tokens=self.max_tokens))
             self._deny_permission = lambda *_: deny_type()
             self._runtime = client_type(

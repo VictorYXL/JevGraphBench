@@ -2,22 +2,35 @@
 
 from hashlib import sha256
 import importlib.util
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.clients.base import ClientClosedError
 from src.utils import paired_graph_ablation as shared
 
 
-ROOT = Path(__file__).resolve().parents[2]
-BRIDGE = ROOT / (
-    "output/experiments/synthetic/matrix/full-matrix-trained-20260925-v1/"
-    "frozen-source/scripts/semif_vllm_bridge.py"
-)
+BRIDGE = Path(os.environ.get("GRAPHDECISIONBENCH_SCORING_BRIDGE",
+                            ROOT / "output/runtime/scoring/semif_vllm_bridge.py"))
 BRIDGE_SHA256 = "5cbebc5ed0be03643c9e0d441f4bcd79d7b868d69e1f0606462314cff2cde3a0"
-CPU_REFERENCE = ROOT / "output/experiments/diagnostics/native/semif-cpu-pilot-20260924-v1"
-MODEL = Path("/fastdata/xianya/models/Qwen3.5-4B")
+CPU_REFERENCE = Path(os.environ.get("GRAPHDECISIONBENCH_SCORING_REFERENCE",
+                                   ROOT / "output/runtime/scoring/cpu-reference"))
+
+
+def model_path():
+    """Require an explicitly configured local checkpoint, never a developer's home path."""
+    value = os.environ.get("GRAPHDECISIONBENCH_SCORING_MODEL")
+    if not value:
+        raise ValueError("Set GRAPHDECISIONBENCH_SCORING_MODEL to the local model directory")
+    path = Path(value).expanduser()
+    if not path.is_dir():
+        raise ValueError("GRAPHDECISIONBENCH_SCORING_MODEL must be an existing directory")
+    return path
 
 
 def _load_bridge():
@@ -39,8 +52,9 @@ def _load_bridge():
 
 def create_client():
     """Keep historical scoring/encoding; migrate only the coordination import."""
+    model = model_path()
     bridge = _load_bridge()
-    tokenizer, encoder = bridge.upstream_functions(CPU_REFERENCE, MODEL)
+    tokenizer, encoder = bridge.upstream_functions(CPU_REFERENCE, model)
 
     class ProposalScoringClient(bridge.SemIfVLLMBridge):
         async def initialize(self):

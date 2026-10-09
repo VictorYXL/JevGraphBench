@@ -1,0 +1,22 @@
+# Supplementary TSP, signed MaxCut, deterministic LT and binary modularity.
+# Heuristic modularity references are not primary certified optima.
+# Prepare/source-evidence require --allow-downloads even if cached; preparation
+# can be CPU-heavy. Freeze needs a genuine successful test log and cohort inputs.
+# These placeholder paths do not supply external artifacts or authorization.
+schema_version: 1
+workflow: optimization
+root: ../output/config-examples/optimization
+default_action: validate
+actions:
+  prepare: {}
+  source-evidence: {}
+  validate: {}
+  freeze:
+    tests_log: ../output/config-inputs/tests.log
+    cohort: ../output/config-inputs/panel
+  run:
+    models: [qwen2]
+    concurrency: 1
+    scope: pilot
+  report:
+    scope: pilot

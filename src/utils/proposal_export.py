@@ -371,7 +371,7 @@ def format_gap(value):
     return "n/a" if value is None else f"{value:.3f}"
 
 
-def render_readme(summary, control_count, supplements):
+def render_readme(summary, control_count, supplements, asset_prefix="."):
     lines = [BEGIN, "### Verified proposal results", "",
              f"The separate extension contains **{summary['complete']:,}/{summary['scheduled']:,} complete primary "
              f"episodes** and **{summary['noncomplete']:,} noncomplete primary episodes**, "
@@ -408,14 +408,15 @@ def render_readme(summary, control_count, supplements):
                       f"{paired['pairs']}/{model['arms']['B']['scheduled']}; {paired['graphs']} graphs"]
             lines.append("| " + " | ".join(cells) + " |")
         lines += ["", "</details>"]
-    lines += ["", "[Primary summary](assets/benchmark/proposal-summary.csv) · "
-              "[Primary episodes](assets/benchmark/proposal-episodes.csv) · "
-              "[Controls](assets/benchmark/proposal-controls.csv) · "
-              "[Control summary](assets/benchmark/proposal-control-summary.csv) · "
-              "[Paired contrasts](assets/benchmark/proposal-paired.csv) · "
-              "[Supplement summary](assets/benchmark/proposal-supplement-summary.csv) · "
-              "[Supplement episodes](assets/benchmark/proposal-supplement-episodes.csv) · "
-              "[Export provenance](assets/benchmark/proposal-results.json)", END]
+    links = (("Primary summary", "proposal-summary.csv"),
+             ("Primary episodes", "proposal-episodes.csv"),
+             ("Controls", "proposal-controls.csv"),
+             ("Control summary", "proposal-control-summary.csv"),
+             ("Paired contrasts", "proposal-paired.csv"),
+             ("Supplement summary", "proposal-supplement-summary.csv"),
+             ("Supplement episodes", "proposal-supplement-episodes.csv"),
+             ("Export provenance", "proposal-results.json"))
+    lines += ["", " · ".join(f"[{label}]({asset_prefix}/{name})" for label, name in links), END]
     return "\n".join(lines)
 
 
@@ -460,8 +461,13 @@ def export(summary, report, controls, replay, summary_sha256, replay_sha256,
     }
     payloads["proposal-results.json"] = json.dumps(manifest, indent=2, allow_nan=False) + "\n"
     readme_path = Path(readme) if readme else None
-    readme_text = update_readme(readme_path.read_text(), render_readme(data, len(baseline), supplements)) if readme_path else None
     output = Path(output)
+    readme_text = None
+    if readme_path:
+        import os
+        from urllib.parse import quote
+        prefix = quote(Path(os.path.relpath(output.resolve(), readme_path.resolve().parent)).as_posix(), safe="/.")
+        readme_text = update_readme(readme_path.read_text(), render_readme(data, len(baseline), supplements, prefix))
     require(output.is_dir(), "Output directory must already exist")
     for name, text in payloads.items():
         target = output / name

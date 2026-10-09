@@ -1,1 +1,1 @@
-"""JevGraphBench: reproducible evaluation of graph decision models."""
+"""GraphDecisionBench: reproducible evaluation of graph decision models."""

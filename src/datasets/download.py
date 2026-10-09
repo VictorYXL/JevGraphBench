@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> None:
         "normalization": "simple unweighted topology; retain numeric IDs; merge duplicate/reverse edges; remove self-loops but retain their nodes; deterministic node/edge order",
         "datasets": {},
     }
-    with httpx.Client(timeout=60.0, headers={"User-Agent": "JevGraphBench-data/0.1"}) as client:
+    with httpx.Client(timeout=60.0, headers={"User-Agent": "GraphDecisionBench-data/0.1"}) as client:
         for name in dict.fromkeys(args.datasets):
             source = get_source(name)
             receipt = None if args.verify_only else download_file(source, args.data_dir / "raw", client)

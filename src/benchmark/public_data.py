@@ -22,7 +22,7 @@ import httpx
 
 from .public_tasks import validate_instance
 
-DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "assets/benchmark/public-catalog.json"
+DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "data/optimization-catalog.json"
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_CATALOG_ENTRIES = 64
 

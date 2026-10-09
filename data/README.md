@@ -1,6 +1,29 @@
-# Real networks: downloads and unified loading
+# Data: sources, downloads and public results
 
-This directory contains source data and provenance only, not subgraph sampling, question generation, labels, model calls, or benchmark results.
+This directory contains source provenance, an optimization dataset catalog and
+the canonical public result bundle. Downloading and loading source graphs do
+not perform subgraph sampling, question generation, labeling or model calls.
+
+## Directory guide and result scope
+
+| Resource | Contents |
+| --- | --- |
+| [manifest.json](manifest.json) | Source URLs, citations, archive checksums and normalized statistics for the four real networks below |
+| [optimization-catalog.json](optimization-catalog.json) | TSPLIB and signed-MaxCut source definitions, pinned hashes, distance conventions and reference provenance |
+| [results/summary.json](results/summary.json) | Primary manuscript-transcribed aggregates for fourteen model-interface configurations |
+| [results/README.md](results/README.md) | Aggregate schema, metrics, provenance and interpretation limits |
+
+**Public results are aggregate-only for fourteen model-interface configurations
+across RQ1, RQ2 and RQ3.** Per-query and per-trajectory outputs are not
+distributed. Charts and tables render from the summary, not raw response replay.
+The optimization catalog describes source datasets and their references, not
+the membership of every primary result cohort or individual trajectory outcomes.
+
+Historical and supplementary result assets are not distributed in the current
+compact bundle. They describe independent cohorts with potentially different
+sampling, candidate pools and references, and have not been merged into the
+primary results. See [reproduction and scope](../docs/reproduction.md) for
+offline reporting and the limits of fresh-clone reproduction.
 
 ## Available datasets
 
@@ -98,7 +121,12 @@ Unweighted shortest paths measure hops, not electrical flow, physical distance, 
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -t . -v
 ```
 
-Dataset tests use temporary small graphs and `httpx.MockTransport`, without real archives or internet access. They cover duplicates, self-loops, isolates, direction, GML, CSV, checksum failures, redirects, caching, interrupted downloads, manifests, and offline verification.
+Tests are grouped into unit, integration and publication packages. Dataset tests
+use temporary small graphs and `httpx.MockTransport`, without real archives or
+internet access. They cover duplicates, self-loops, isolates, direction, GML,
+CSV, checksum failures, redirects, caching, interrupted downloads, manifests,
+and offline verification. Optional historical-fixture checks are disabled by
+default; see [tests/README.md](../tests/README.md).

@@ -1,0 +1,16 @@
+# Shared root with graph_text_prime.yaml: freeze both datasets once, not twice.
+# Freeze needs non-portable historical inputs and --allow-downloads, even cached.
+# Old arXiv lanes are reuse-only; qwen2 is supported for a new approved run.
+# Approval is a placeholder for genuine lane-specific, hash-bound authorization.
+schema_version: 1
+workflow: graph_text
+root: ../output/config-examples/graph-text
+default_action: verify
+actions:
+  freeze: {}
+  verify: {}
+  report: {}
+  run:
+    model: qwen2
+    dataset: arxiv
+    approval: ../output/config-inputs/graph-text-approval.json

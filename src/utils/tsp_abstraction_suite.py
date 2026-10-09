@@ -40,7 +40,7 @@ EPISODE_SECONDS = 900
 
 def code_hashes():
     hashes = audit.code_hashes()
-    hashes["tests/test_tsp_abstraction.py"] = digest(REPO / "tests/test_tsp_abstraction.py")
+    hashes["tests/integration/test_tsp_abstraction.py"] = digest(REPO / "tests/integration/test_tsp_abstraction.py")
     return dict(sorted(hashes.items()))
 
 
@@ -277,7 +277,7 @@ def plan(root, verified):
         "protocol": PROTOCOL, "root": str(root), "created_at": public.now(),
         "frozen_before_any_new_model_call": True, "seed": SEED,
         "model_configs": {name: asdict(configs[name]) for name in MODELS},
-        "arms": {"A": "Reused verified-main-v3 all legal cities; complete tsp225 replacements only.",
+        "arms": {"A": "Reused verified main-panel all-legal-city episodes; complete tsp225 replacements only.",
                  "B": "Anonymous deduplicated proposal cities; full graph and shared candidate numeric features.",
                  "C": "Same deduplicated proposals/order/features at same history, plus rule semantics and mapping."},
         "rules": {"order": abstraction.RULES, "formulas": abstraction.FORMULAS,

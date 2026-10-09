@@ -1,0 +1,23 @@
+# Six real-network tasks, including queried-pair connectivity.
+# Freeze is local-only but needs existing authorization, pinned adapters,
+# panel artifacts and verified data. This is not fresh-clone primary reproduction.
+# Input paths are placeholders, relative to this YAML; no artifacts are supplied.
+schema_version: 1
+workflow: structural
+root: ../output/config-examples/structural
+default_action: validate
+actions:
+  freeze:
+    data_dir: ../data
+    historical_root: ../output/config-inputs/panel
+    authorization: ../output/config-inputs/structural-authorization.json
+  validate:
+    data_dir: ../data
+  run:
+    model: jev_action
+    split: test
+    concurrency: 1
+  report: {}
+  check-lane:
+    model: jev_action
+    require_complete: true
