@@ -234,22 +234,27 @@ incomplete/failed coverage, 2 for CLI/setup refusal. No live outcome is asserted
 
 ## Citation
 
-If you use the benchmark, code or results, please cite **GraphDecisionBench** and
-identify the version or commit used:
+If you use the benchmark, code or results, please cite the
+[GraphDecisionBench paper](https://arxiv.org/abs/2610.06354). For code-based
+experiments, also identify the package version or commit used:
 
 ```bibtex
 @misc{graphdecisionbench2026,
-  title        = {GraphDecisionBench},
+  title        = {GraphDecisionBench: Benchmarking System One Models on Graph Tasks},
   author       = {Yang, Xianliang and Zhang, Yapu and Zhao, Li},
   year         = {2026},
-  url          = {https://github.com/VictorYXL/GraphDecisionBench},
-  howpublished = {Software},
-  note         = {Package version 0.1.0}
+  eprint       = {2610.06354},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.AI},
+  doi          = {10.48550/arXiv.2610.06354},
+  url          = {https://arxiv.org/abs/2610.06354}
 }
 ```
 
-[Machine-readable citation](CITATION.cff). This is a software citation;
-no publication venue, DOI or arXiv identifier is asserted. If reusing data,
+[Machine-readable citation](CITATION.cff). The unversioned arXiv link points to
+the latest available paper revision. Code is maintained in the
+[GraphDecisionBench repository](https://github.com/VictorYXL/GraphDecisionBench).
+If reusing data,
 also cite the original sources: [SNAP](https://snap.stanford.edu/data/),
 [Power Grid](https://websites.umich.edu/~mejn/netdata/),
 [BioSNAP](https://snap.stanford.edu/biodata/),

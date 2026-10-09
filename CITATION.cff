@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use GraphDecisionBench, please cite this software and identify the package version or commit used."
+message: "If you use GraphDecisionBench, please cite the arXiv paper below and identify the package version or commit used for code-based experiments."
 type: software
 title: GraphDecisionBench
 authors:
@@ -12,7 +12,7 @@ authors:
 repository-code: "https://github.com/VictorYXL/GraphDecisionBench"
 url: "https://github.com/VictorYXL/GraphDecisionBench"
 preferred-citation:
-  type: unpublished
+  type: article
   title: "GraphDecisionBench: Benchmarking System One Models on Graph Tasks"
   authors:
     - family-names: Yang
@@ -22,4 +22,6 @@ preferred-citation:
     - family-names: Zhao
       given-names: Li
   year: 2026
-  url: "https://github.com/VictorYXL/GraphDecisionBench"
+  journal: arXiv
+  doi: "10.48550/arXiv.2610.06354"
+  url: "https://arxiv.org/abs/2610.06354"
